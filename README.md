@@ -1,7 +1,16 @@
-# Power Bank HTML
+# Web Serial 串口调试助手
 
-## 2026-04-17
-1. 新增完整单页应用 [Power Bank.html](c:/Users/30335/Desktop/Power%20Bank%20HTML/Power%20Bank.html)。
+基于 Web Serial API 的网页版串口调试工具，面向串口透传调试场景，开箱即用、单页部署。
+
+## 今日更新（2026-04-18）
+
+1. 将页面入口从 `Power Bank.html` 调整为 `index.html`，适配 GitHub Pages 默认访问路径。
+2. 保留并整理 2026-04-17 完成的全部串口调试能力与界面实现。
+3. 更新 README，补充 GitHub Pages 发布与访问说明。
+
+## 2026-04-17 功能实现记录
+
+1. 新增完整单页应用 [index.html](./index.html)。
 2. 实现串口授权、端口列表刷新、连接/断开和热插拔监听。
 3. 支持串口参数配置：波特率（自定义）、数据位、停止位、校验位、流控。
 4. 支持字符串/HEX 双发送模式，支持自动换行（无/LF/CRLF/CR）。
@@ -34,15 +43,30 @@
 6. 如需发送文件，选择文件并设置分片参数后点击“开始发送文件”。
 7. 可随时清空日志或导出日志文本文件。
 
+## GitHub Pages 发布
+
+你的仓库地址是：`https://github.com/QingYu4012/Power-Bank-HTML`
+
+开启 GitHub Pages 后，访问地址是：
+`https://qingyu4012.github.io/Power-Bank-HTML/`
+
+设置步骤：
+
+1. 打开仓库 `Settings`。
+2. 进入 `Pages`。
+3. `Build and deployment` 选择 `Deploy from a branch`。
+4. Branch 选择 `master`，目录选择 `/ (root)`，点击保存。
+5. 等待 1-3 分钟后刷新上面的访问地址。
+
 ## 部署说明
 
 - 本项目为纯静态页面，无需后端服务。
-- 直接部署 `Power Bank.html` 即可上线。
+- 入口文件为 [index.html](./index.html)。
 - Web Serial API 仅在安全上下文可用，请使用以下方式访问：
   - `https://` 域名
   - `http://localhost`
 
 ## 目录结构
 
-- [Power Bank.html](c:/Users/30335/Desktop/Power%20Bank%20HTML/Power%20Bank.html)：主页面与全部前端逻辑
-- [README.md](c:/Users/30335/Desktop/Power%20Bank%20HTML/README.md)：项目说明与更新记录
+- [index.html](./index.html)：主页面与全部前端逻辑
+- [README.md](./README.md)：项目说明与更新记录
