@@ -1,8 +1,8 @@
-# Web Serial 串口调试助手
+# Power Bank 串口调试助手
 
 基于 Web Serial API 的网页版串口调试工具，面向串口透传调试场景，开箱即用、单页部署。
 
-## 今日更新（2026-04-18）
+## 2026-04-18 V0.1
 
 1. 将页面入口从 `Power Bank.html` 调整为 `index.html`，适配 GitHub Pages 默认访问路径。
 2. 保留并整理 2026-04-17 完成的全部串口调试能力与界面实现。
@@ -53,7 +53,7 @@
 设置步骤：
 
 1. 打开仓库 `Settings`。
-2. 进入 `Pages`。
+2. 进入 `Pages`。注意要使用Pages功能仓库必须是公开的
 3. `Build and deployment` 选择 `Deploy from a branch`。
 4. Branch 选择 `master`，目录选择 `/ (root)`，点击保存。
 5. 等待 1-3 分钟后刷新上面的访问地址。
@@ -70,3 +70,11 @@
 
 - [index.html](./index.html)：主页面与全部前端逻辑
 - [README.md](./README.md)：项目说明与更新记录
+
+## 2026-04-18 V0.2
+- 发布 `GitHub Pages`
+
+
+## 2026-04-18 V0.3
+- 完善修改 `README` 文件
+
