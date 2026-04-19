@@ -1,482 +1,3400 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Power Bank 数据监测</title>
-  <style>
-    :root {
-      --bg1:#0b1530;--bg2:#122949;--bg3:#0a1c35;--card:rgba(10,28,52,.84);--sub:rgba(17,42,74,.85);
-      --line:rgba(142,197,255,.3);--line2:rgba(142,197,255,.8);--text:#edf5ff;--muted:#bdd1eb;
-      --neon:#8ec5ff;--ok:#62f7a2;--danger:#ff6f86;--r:16px;--shadow:0 16px 34px rgba(0,0,0,.45);
-    }
-    *{box-sizing:border-box}
-    html,body{margin:0;min-height:100%;font-family:"Source Sans 3","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;color:var(--text);color-scheme:dark}
-    body{
-      overflow:hidden;
-      background:
-        radial-gradient(80rem 40rem at -8% -25%, rgba(142,197,255,.18) 0%, transparent 60%),
-        radial-gradient(70rem 45rem at 115% 10%, rgba(105,171,255,.13) 0%, transparent 62%),
-        linear-gradient(180deg,var(--bg1),var(--bg2) 48%,var(--bg3));
-    }
-    .grid{position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(rgba(142,197,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(142,197,255,.05) 1px,transparent 1px);background-size:36px 36px;mask-image:radial-gradient(circle at 50% 15%,rgba(0,0,0,.85),transparent 90%)}
-    .shell{position:relative;z-index:1;max-width:1360px;height:100vh;margin:0 auto;padding:18px;display:flex;flex-direction:column;gap:14px}
-    .top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 14px;border-radius:24px;border:1px solid rgba(142,197,255,.45);background:linear-gradient(90deg,rgba(142,197,255,.13),rgba(216,235,255,.08));box-shadow:var(--shadow);cursor:pointer}
-    .top-left{display:flex;align-items:center;gap:10px;min-width:0}
-    .icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:radial-gradient(circle,rgba(142,197,255,.33),transparent 70%);color:var(--neon)}
-    .title{font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .chip{padding:5px 10px;border-radius:10px;border:1px solid rgba(189,209,235,.5);background:rgba(122,184,255,.13);font-size:11px;font-weight:700;color:var(--muted)}
-    .chip.ok{color:var(--neon);border-color:rgba(142,197,255,.8)}
-    .banner{display:none;border:1px solid rgba(255,165,95,.6);background:rgba(255,145,90,.12);color:#ffd8bc;border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.35}
-    .banner.show{display:block}
-    .conn{display:flex;justify-content:space-between;align-items:center;gap:12px}
-    .meta{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--muted);flex:1}
-    .actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
-    .state-btn{width:108px;height:36px;border-radius:18px;border:1px solid rgba(189,209,235,.45);background:rgba(122,184,255,.13);color:var(--muted);display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;font-weight:700;cursor:pointer}
-    .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
-    .state-btn.on{border-color:var(--line2);color:var(--neon)}
-    .state-btn.on .dot{background:var(--neon)}
-    .main-btn{width:94px;height:36px;border-radius:18px;border:none;cursor:pointer;font-weight:700;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;color:#102849;background:var(--neon)}
-    .main-btn.on{background:#1f406f;color:var(--neon);border:1px solid rgba(142,197,255,.45)}
-    .view{flex:1;min-height:0}
-    .scroll{height:100%;overflow:auto;padding-right:4px;display:flex;flex-direction:column;gap:20px}
-    .card{border-radius:20px;border:1.8px solid rgba(142,197,255,.9);background:var(--card);box-shadow:var(--shadow);padding:16px}
-    .head{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:16px;font-weight:700}
-    .line{height:1px;background:var(--neon);margin:8px 0;opacity:.85}
-    .sub{border-radius:10px;border:1px solid rgba(142,197,255,.22);background:linear-gradient(180deg,var(--sub),rgba(17,42,74,.66));padding:10px 12px}
-    .time{display:grid;grid-template-columns:1fr 80px 1fr;gap:8px;align-items:center}
-    .tcol{text-align:center;display:flex;flex-direction:column;gap:4px}
-    .t1{color:var(--muted);font-size:11px}.t2{font-size:12px;font-weight:600}.t3{font-size:15px;font-weight:600}
-    .mini{height:24px;border-radius:8px;border:1px solid rgba(142,197,255,.7);background:rgba(142,197,255,.14);color:var(--neon);font-size:10px;font-weight:700;cursor:pointer;width:100%}
-    .st{margin-top:8px;border-radius:10px;border:1px solid rgba(142,197,255,.24);background:linear-gradient(90deg,rgba(17,42,74,.76),rgba(17,42,74,.56));padding:7px 8px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-    .si{display:inline-flex;align-items:center;justify-content:center;gap:6px;color:rgba(216,235,255,.56);font-size:12px}
-    .bar{width:3px;height:12px;background:rgba(216,235,255,.3)}
-    .si.on{color:#d8ebff;font-weight:700}.si.on .bar{background:#d8ebff}
-    .rings{margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .rw{display:flex;align-items:center;justify-content:center;min-height:132px}
-    .ring{--v:0;--c:#8ec5ff;width:112px;height:112px;border-radius:50%;position:relative;display:grid;place-items:center;background:radial-gradient(circle at center,rgba(142,197,255,.2) 0 54%,transparent 55%),conic-gradient(var(--c) calc(var(--v)*1%), rgba(142,197,255,.2) 0);box-shadow:0 0 0 5px rgba(142,197,255,.08) inset}
-    .ring::before{content:"";position:absolute;inset:9px;border-radius:50%;background:rgba(6,22,42,.88);border:1px solid rgba(142,197,255,.22)}
-    .rc{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center}
-    .rv{font-size:16px;font-weight:700;color:var(--c);line-height:1}
-    .rl{font-size:10px;color:var(--muted);line-height:1}
-    .rs{font-size:9px;color:rgba(142,197,255,.7);line-height:1}
-    .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    .kv{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-top:8px}
-    .kv:first-child{margin-top:0}
-    .k,.v,.u{color:var(--neon);font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .v{text-align:center}.u{text-align:right}
-    .single .kv{grid-template-columns:1fr 2fr}.single .u{display:none}
-    .ports{display:flex;flex-direction:column;gap:8px}
-    .pc{border-radius:10px;border:1px solid rgba(142,197,255,.36);background:linear-gradient(180deg,var(--sub),rgba(17,42,74,.66));padding:8px 10px;display:flex;flex-direction:column;gap:6px}
-    .ph{display:flex;justify-content:space-between;align-items:center;gap:10px}
-    .pt{font-size:13px;font-weight:700}.ps{font-size:10px;color:var(--muted)}
-    .tiny{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:10px;color:var(--muted)}
-    .psub{border-radius:10px;border:1px solid rgba(142,197,255,.22);background:linear-gradient(180deg,var(--sub),rgba(17,42,74,.66));padding:9px 10px;display:flex;flex-direction:column;gap:6px}
-    .hs{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;gap:8px;font-size:15px;color:var(--neon);font-weight:600}
-    .bolt{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:12px;color:rgba(189,209,235,.72);background:transparent}
-    .bolt.on{color:var(--ok);background:rgba(98,247,162,.35)}
-    .empty{height:100px;border-radius:10px;border:1px solid rgba(142,197,255,.22);background:linear-gradient(180deg,var(--sub),rgba(17,42,74,.66))}
-    .dev{height:100%;display:flex;flex-direction:column;gap:10px;border-radius:20px;border:1.8px solid rgba(142,197,255,.9);background:var(--card);padding:14px;box-shadow:var(--shadow);min-height:0}
-    .dt{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-    .dtl{font-size:16px;font-weight:700}
-    .dtr{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .ready{font-size:12px;color:#b9d8ff;font-weight:700}.ready.ok{color:var(--neon)}
-    .ob{height:32px;border-radius:10px;border:1px solid rgba(142,197,255,.6);background:transparent;color:var(--neon);font-size:12px;font-weight:700;padding:0 10px;cursor:pointer}
-    .box,.sbox,.lbox{border-radius:12px;border:1px solid rgba(142,197,255,.22);background:linear-gradient(180deg,var(--sub),rgba(17,42,74,.66))}
-    .box,.sbox{padding:8px 10px;display:flex;flex-direction:column;gap:8px}
-    .stitle{font-size:11px;color:var(--muted)}
-    .checks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    .check{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px}
-    .check input{width:16px;height:16px;accent-color:var(--neon);margin:0}
-    .intv{display:grid;grid-template-columns:.9fr 1.1fr;gap:8px;align-items:center}
-    input,select,textarea,button{font-family:inherit}
-    .f{width:100%;border-radius:10px;border:1px solid rgba(142,197,255,.45);background:rgba(10,29,55,.84);color:var(--text);padding:8px 10px;outline:none;font-size:12px}
-    .f:focus{border-color:var(--neon);box-shadow:0 0 0 3px rgba(142,197,255,.2)}
-    .send{min-height:72px;resize:vertical;font-family:"JetBrains Mono",Consolas,monospace;font-size:12px}
-    .acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-    .gb{height:42px;border-radius:20px;border:none;cursor:pointer;font-size:13px;font-weight:700;color:var(--text)}
-    .gb.c1{background:linear-gradient(90deg,#264c7d,#3f70aa)} .gb.c2{background:linear-gradient(90deg,#2e598c,#4d7db5)} .gb.c3{background:linear-gradient(90deg,#5b95ca,#8ec5ff);color:#102849}
-    .cnt{font-size:11px;color:var(--muted)}
-    .lbox{flex:1;min-height:0;padding:10px;overflow:auto}
-    .le{height:100%;display:grid;place-items:center;color:var(--muted);font-size:12px}
-    .li{border-radius:10px;border:1px solid rgba(182,226,255,.7);background:linear-gradient(90deg,rgba(66,113,171,.45),rgba(170,213,241,.3),rgba(234,246,255,.25));padding:8px 10px;margin-bottom:6px;font-family:"JetBrains Mono",Consolas,monospace;font-size:11px;white-space:pre-wrap;word-break:break-word}
-    .li.rx{border-color:rgba(159,211,255,.72);background:linear-gradient(90deg,rgba(75,121,176,.45),rgba(141,190,232,.3),rgba(223,240,255,.25))}
-    .dim{color:var(--muted)}
-    .m{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:12}
-    .m.show{display:flex}
-    .d{width:min(760px,100%);max-height:min(92vh,760px);border-radius:18px;border:1px solid rgba(142,197,255,.58);background:var(--card);box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:0}
-    .d.s{width:min(520px,100%)}
-    .dh{padding:12px 14px;border-bottom:1px solid rgba(142,197,255,.2);display:flex;justify-content:space-between;align-items:center;gap:8px}
-    .dtit{font-size:16px;font-weight:700}
-    .db{padding:12px 14px;overflow:auto;display:flex;flex-direction:column;gap:8px;min-height:0}
-    .df{border-top:1px solid rgba(142,197,255,.2);padding:10px 14px;display:flex;justify-content:flex-end;gap:8px}
-    .cg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-    .cg.two{grid-template-columns:repeat(2,minmax(0,1fr))}.cg.four{grid-template-columns:repeat(4,minmax(0,1fr))}
-    .c{border-radius:9px;border:1px solid rgba(189,209,235,.45);background:transparent;color:var(--text);font-size:11px;padding:6px 6px;text-align:center;cursor:pointer;min-height:30px;display:grid;place-items:center}
-    .c.on{border-color:var(--neon);color:var(--neon);background:rgba(142,197,255,.18);font-weight:700}
-    .b{border:none;border-radius:10px;background:#2c5a92;color:var(--text);font-size:12px;font-weight:700;padding:8px 10px;cursor:pointer}
-    .b.full{width:100%}.b.ghost{border:1px solid rgba(142,197,255,.55);background:transparent;color:var(--neon)}
-    .note{color:var(--muted);font-size:11px;line-height:1.35}.err{color:var(--danger);font-size:11px}.ok{color:var(--neon)}
-    .iw{position:relative}.eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;padding:0}
-    .tw{position:fixed;left:50%;top:20px;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:20;pointer-events:none;width:min(560px,calc(100% - 24px))}
-    .t{border-radius:10px;border:1px solid rgba(142,197,255,.5);background:rgba(7,18,36,.88);padding:8px 10px;font-size:12px;box-shadow:var(--shadow);animation:ti .18s ease}
-    @keyframes ti{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-    @media (max-width:980px){body{overflow:auto}.shell{height:auto;min-height:100vh}.time{grid-template-columns:1fr}.rings,.g2{grid-template-columns:1fr}.conn{flex-direction:column;align-items:stretch}.actions{justify-content:flex-start}.cg.four{grid-template-columns:repeat(2,minmax(0,1fr))}.checks,.acts{grid-template-columns:1fr}.intv{grid-template-columns:1fr}}
-    @media (max-width:620px){.shell{padding:12px}.cg,.cg.two,.cg.four{grid-template-columns:1fr}.tiny{grid-template-columns:1fr}.hs{grid-template-columns:1fr}.dh{flex-wrap:wrap}.top{align-items:flex-start}}
-  </style>
-</head>
-<body>
-  <div class="grid"></div>
-  <div class="shell">
-    <section id="topTitle" class="top" title="连续点击可进入开发者模式">
-      <div class="top-left"><div class="icon">🔋</div><div class="title">充电宝数据监测</div></div>
-      <div id="usbPermissionChip" class="chip">权限未授权</div>
-    </section>
-    <div id="secureBanner" class="banner"></div>
-    <section class="conn">
-      <div class="meta"><div id="portText">端口：未接入</div><div id="baudText">波特率：921600</div></div>
-      <div class="actions">
-        <button id="statusConfigBtn" class="state-btn" type="button"><span class="dot"></span><span id="statusLabel">未连接</span></button>
-        <button id="connectToggleBtn" class="main-btn" type="button">🔌 连接</button>
-      </div>
-    </section>
-
-    <main id="normalView" class="view scroll">
-      <article class="card">
-        <div class="sub time">
-          <div class="tcol"><div class="t1">手机当前时间</div><div id="phoneDateText" class="t2">---</div><div id="phoneTimeText" class="t3">---</div></div>
-          <div><button id="syncRtcBtn" class="mini" type="button">同步RTC</button></div>
-          <div class="tcol"><div class="t1">充电宝时间</div><div id="powerDateText" class="t2">---</div><div id="powerTimeText" class="t3">---</div></div>
-        </div>
-        <div class="st">
-          <div id="stateIdle" class="si on"><span class="bar"></span><span>空闲</span></div>
-          <div id="stateCharging" class="si"><span class="bar"></span><span>充电</span></div>
-          <div id="stateDischarging" class="si"><span class="bar"></span><span>放电</span></div>
-        </div>
-        <div class="rings">
-          <div class="rw">
-            <div id="socRing" class="ring" style="--v:0;--c:#8ec5ff">
-              <div class="rc"><div id="socValue" class="rv">0%</div><div class="rl">电量</div><div id="socStatusText" class="rs">待机中</div></div>
-            </div>
-          </div>
-          <div class="rw">
-            <div id="sohRing" class="ring" style="--v:0;--c:#8ec5ff">
-              <div class="rc"><div id="sohValue" class="rv">0%</div><div class="rl">健康度</div></div>
-            </div>
-          </div>
-        </div>
-      </article>
-
-      <article class="card">
-        <div class="head"><span>🔋</span><span>电池信息</span></div>
-        <div class="line"></div>
-        <div class="g2" style="margin-top:6px;">
-          <div class="sub">
-            <div class="kv"><div class="k">电压：</div><div id="packVoltage" class="v">---</div><div class="u">V</div></div>
-            <div class="kv"><div class="k">电流：</div><div id="packCurrent" class="v">---</div><div class="u">A</div></div>
-            <div class="kv"><div class="k">温度：</div><div id="batteryTemperature" class="v">---</div><div class="u">°C</div></div>
-            <div class="kv"><div class="k">循环：</div><div id="cycleCount" class="v">---</div><div class="u">次</div></div>
-          </div>
-          <div class="sub">
-            <div class="kv"><div class="k">第一节：</div><div id="cellVoltage1" class="v">---</div><div class="u">V</div></div>
-            <div class="kv"><div class="k">第二节：</div><div id="cellVoltage2" class="v">---</div><div class="u">V</div></div>
-            <div class="kv"><div class="k">第三节：</div><div id="cellVoltage3" class="v">---</div><div class="u">V</div></div>
-            <div class="kv"><div class="k">第四节：</div><div id="cellVoltage4" class="v">---</div><div class="u">V</div></div>
-          </div>
-        </div>
-        <div class="sub" style="margin-top:8px;">
-          <div class="kv"><div class="k">预计充满：</div><div id="estimateChargeMinutes" class="v">---</div><div class="u">分钟</div></div>
-          <div class="kv"><div class="k">预计放空：</div><div id="estimateDischargeMinutes" class="v">---</div><div class="u">分钟</div></div>
-        </div>
-        <div class="sub" style="margin-top:8px;">
-          <div class="kv"><div class="k">当前容量：</div><div id="remainingCapacity" class="v">---</div><div class="u">mAH</div></div>
-          <div class="kv"><div class="k">满电容量：</div><div id="fullChargeCapacity" class="v">---</div><div class="u">mAH</div></div>
-          <div class="kv"><div class="k">设计容量：</div><div id="designCapacity" class="v">---</div><div class="u">mAH</div></div>
-        </div>
-        <div class="sub single" style="margin-top:8px;">
-          <div class="kv"><div class="k">电池类型：</div><div id="batteryType" class="v">---</div><div class="u"></div></div>
-          <div class="kv"><div class="k">电池厂商：</div><div id="batteryVendor" class="v">---</div><div class="u"></div></div>
-          <div class="kv"><div class="k">生产日期：</div><div id="productionDate" class="v">---</div><div class="u"></div></div>
-          <div class="kv"><div class="k">批次序列号：</div><div id="batchSerialNumber" class="v">---</div><div class="u"></div></div>
-        </div>
-      </article>
-
-      <article class="card">
-        <div class="head"><span>🔌</span><span>端口信息</span></div>
-        <div class="line"></div>
-        <div id="portInfoList" class="ports"></div>
-      </article>
-
-      <article class="card">
-        <div class="head"><span style="color:#ff9fb0">⚠</span><span>异常信息</span></div>
-        <div class="line"></div>
-        <div class="empty"></div>
-      </article>
-    </main>
-
-    <section id="developerView" class="view dev" style="display:none;">
-      <div class="dt">
-        <div class="dtl">开发者模式</div>
-        <div class="dtr"><div id="passthroughReadyText" class="ready">透传未连接</div><button id="exitDevBtn" class="ob" type="button">返回正常模式</button></div>
-      </div>
-      <div class="box">
-        <div class="stitle">透传设置</div>
-        <div class="checks">
-          <label class="check"><input id="hexSendEnabled" type="checkbox"><span>HEX发送</span></label>
-          <label class="check"><input id="hexDisplayEnabled" type="checkbox" checked><span>HEX显示</span></label>
-        </div>
-        <div class="intv">
-          <label class="check"><input id="timedSendEnabled" type="checkbox"><span>定时发送</span></label>
-          <input id="timedIntervalText" class="f" type="text" inputmode="numeric" maxlength="5" placeholder="发送间隔(ms)" value="1000" disabled>
-        </div>
-        <div class="stitle">发送附加换行</div>
-        <div class="checks" style="grid-template-columns:repeat(3,1fr)">
-          <label class="check"><input name="lineEnding" type="radio" value="0" checked><span>无</span></label>
-          <label class="check"><input name="lineEnding" type="radio" value="1"><span>\n</span></label>
-          <label class="check"><input name="lineEnding" type="radio" value="2"><span>\r\n</span></label>
-        </div>
-      </div>
-      <div class="sbox">
-        <textarea id="sendInput" class="f send" placeholder="发送区（文本）"></textarea>
-        <div class="acts">
-          <button id="openCmdBtn" class="gb c1" type="button">命令</button>
-          <button id="clearDevBtn" class="gb c2" type="button">清空</button>
-          <button id="sendDevBtn" class="gb c3" type="button">发送</button>
-        </div>
-        <div id="byteCounter" class="cnt">发送字节：0    接收字节：0</div>
-      </div>
-      <div id="devLogBox" class="lbox"><div class="le">暂无透传数据</div></div>
-    </section>
-  </div>
-
-  <div id="serialConfigModal" class="m">
-    <div class="d s">
-      <div class="dh"><div class="dtit">虚拟串口设置</div></div>
-      <div class="db">
-        <div class="stitle" style="font-size:13px;color:var(--text)">选择USB端口号</div>
-        <div id="portSelectGrid" class="cg"></div>
-        <div class="stitle" style="font-size:13px;color:var(--text);margin-top:4px">波特率</div>
-        <div id="baudSelectGrid" class="cg four"></div>
-        <label class="check" style="padding-top:2px"><input id="useCustomBaud" type="radio" name="baudMode" value="custom"><span>自定义波特率</span></label>
-        <input id="customBaudInput" class="f" type="text" inputmode="numeric" maxlength="7" placeholder="例如 256000">
-        <div id="serialConfigError" class="err"></div>
-      </div>
-      <div class="df"><button id="cancelSerialConfigBtn" class="b ghost" type="button">取消</button><button id="saveSerialConfigBtn" class="b" type="button">保存</button></div>
-    </div>
-  </div>
-
-  <div id="commandModal" class="m">
-    <div class="d">
-      <div class="dh">
-        <div class="dtit">USB命令</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div id="adminStateText" class="note ok" style="display:none">管理员已授权</div>
-          <button id="adminLoginBtn" class="b ghost" type="button" style="padding:6px 8px;font-size:11px">管理员登录</button>
-        </div>
-      </div>
-      <div class="db">
-        <div class="note">数据流协议命令（帧头AA BB，CRC8-CCITT）</div>
-        <div class="cg two"><button id="cmdGetAckBtn" class="b" type="button">GET_ACK</button><button id="cmdGetInfoBtn" class="b" type="button">GET_INFO</button></div>
-        <div class="stitle" style="font-size:12px;color:var(--text)">USB_CMD_GET_DATA</div>
-        <div id="getDataTypeGrid" class="cg"></div>
-        <button id="sendGetDataBtn" class="b full" type="button">发送 GET_DATA</button>
-        <div class="stitle" style="font-size:12px;color:var(--text)">USB_CMD_GET_RTC / SET_RTC</div>
-        <div id="rtcFormatGrid" class="cg two"></div>
-        <div class="cg two"><button id="sendGetRtcBtn" class="b" type="button">发送 GET_RTC</button><button id="sendSetRtcBtn" class="b" type="button">发送 SET_RTC</button></div>
-        <div id="setRtcNote" class="note">SET_RTC将直接发送北京时间（正常时间格式）</div>
-        <div class="stitle" style="font-size:12px;color:var(--text)">USB_CMD_GET_PROT_DATA</div>
-        <div id="protPortTypeGrid" class="cg four"></div>
-        <button id="sendGetPortBtn" class="b full" type="button">发送 GET_PORT</button>
-        <div class="line" style="margin:6px 0;opacity:.32"></div>
-        <div class="stitle" style="font-size:12px;color:var(--text)">USB_CMD_GET_TEST / SET_TEST（管理员）</div>
-        <div id="adminTestBlocked" class="note">请先登录管理员后再使用 GET_TEST / SET_TEST</div>
-        <div id="adminTestSection" style="display:none">
-          <div class="note">参数选择（不同参数输入范围不同）</div>
-          <div id="testParamGrid" class="cg two"></div>
-          <div id="testParamRange" class="note"></div>
-          <div id="testDeviceValue" class="note"></div>
-          <div id="testResponseTip" class="note ok">未读取测试数据</div>
-          <div id="testQuickGrid" class="cg"></div>
-          <input id="setTestValueInput" class="f" type="text" inputmode="numeric" maxlength="5" placeholder="SET_TEST数值">
-          <div class="cg two"><button id="sendGetTestBtn" class="b" type="button">获取测试数据</button><button id="sendSetTestBtn" class="b" type="button">发送测试数据</button></div>
-        </div>
-      </div>
-      <div class="df"><button id="closeCommandModalBtn" class="b ghost" type="button">关闭</button></div>
-    </div>
-  </div>
-
-  <div id="adminModal" class="m">
-    <div class="d s">
-      <div class="dh"><div class="dtit">管理员登录</div></div>
-      <div class="db">
-        <div class="note">管理员名称</div>
-        <input class="f" type="text" value="Psthk" readonly>
-        <div class="note">密码（区分大小写）</div>
-        <div class="iw"><input id="adminPasswordInput" class="f" type="password" placeholder="密码（区分大小写）"><button id="toggleAdminPasswordBtn" class="eye" type="button">显示密码</button></div>
-        <div id="adminLoginError" class="err"></div>
-      </div>
-      <div class="df"><button id="cancelAdminBtn" class="b ghost" type="button">取消</button><button id="confirmAdminBtn" class="b" type="button">登录</button></div>
-    </div>
-  </div>
-
-  <div id="toastWrap" class="tw"></div>
-
-  <script>
-    (() => {
-      const CMD_ACK=0x00,CMD_DATA=0x02,CMD_RTC=0x03,CMD_SET_RTC=0x04,CMD_PORT=0x05,CMD_GET_TEST=0x06,CMD_SET_TEST=0x07;
-      const DT_TEMP=0,DT_VOLT=1,DT_C1=2,DT_C2=3,DT_CUR=4,DT_RC=5,DT_FC=6,DT_DC=7,DT_TTE=8,DT_TTF=9,DT_CYCLE=10,DT_SOC=11,DT_SOH=12,DT_COUNT=13,DT_TYPE=14,DT_VENDOR=15,DT_DATE=16,DT_STATUS=17,DT_MAX=DT_STATUS;
-      const STATIC_TYPES=[DT_DC,DT_TYPE,DT_VENDOR,DT_DATE],DYNAMIC_TYPES=[DT_TEMP,DT_VOLT,DT_C1,DT_C2,DT_CUR,DT_RC,DT_FC,DT_TTE,DT_TTF,DT_CYCLE,DT_SOC,DT_SOH,DT_COUNT,DT_STATUS];
-      const PORT_COUNT=4,MIN_CMD_MS=5,BEIJING_OFFSET=8*60*60*1000,DEV_TAP_MS=800,ADMIN_NAME="Psthk",ADMIN_PWD="Lyh21180201";
-      const GET_DATA_OPTS=[[0,"电池温度"],[1,"电池总电压"],[2,"第一节电压"],[3,"第二节电压"],[4,"电池电流"],[5,"剩余容量"],[6,"满充容量"],[7,"设计容量"],[8,"预计放空时间"],[9,"预计充满时间"],[10,"循环次数"],[11,"SOC电量"],[12,"SOH健康度"],[13,"电池串数"],[14,"电池类型"],[15,"电池厂商"],[16,"电池出厂日期"],[17,"充放电状态"]];
-      const RTC_OPTS=[[0,"正常时间"],[1,"Unix时间戳"]],PORT_OPTS=[[0,"端口0"],[1,"端口1"],[2,"端口2"],[3,"端口3"]];
-      const TEST_OPTS=[{id:0,label:"LT_Tset老化使能",min:0,max:1,def:0,unit:"",quick:[{v:0,l:"关闭"},{v:1,l:"开启"}]},{id:1,label:"CycleCount循环次数",min:0,max:65535,def:0,unit:"",quick:[{v:70,l:"70"},{v:140,l:"140"},{v:210,l:"210"}]}];
-
-      const app={supported:"serial" in navigator,ports:[],selPort:null,baud:921600,useCustom:false,common:[9600,19200,38400,57600,115200,230400,460800,921600],activePort:null,writer:null,reader:null,readActive:false,writeQ:Promise.resolve(),isConnected:false,pendingData:[],pendingPort:[],pendingStatic:new Set(STATIC_TYPES),bufData:[],bufTest:[],soc:0,soh:0,status:0,bat:null,portsInfo:null,dev:false,tapCount:0,lastTap:0,hexSend:false,hexShow:true,timed:false,timedText:"1000",lineMode:0,sendInput:"",tx:0,rx:0,logs:[],getDataType:0,getRtcFmt:0,setRtcFmt:0,protType:0,admin:false,pwdShow:false,pwdInput:"",pwdErr:"",testSel:TEST_OPTS[0].id,testVal:String(TEST_OPTS[0].def),ltVal:0,testMap:new Map(),lastTestReq:TEST_OPTS[0].id,testTip:"未读取测试数据",lastCmdNano:0,phoneMs:Date.now(),pbMs:new Date(2026,2,31,0,0,0,0).getTime(),pbDefault:new Date(2026,2,31,0,0,0,0).getTime(),phoneTimer:null,dataToken:0,portToken:0,timedTimer:null};
-      app.bat=defBat(); app.portsInfo=defPorts();
-
-      const el={topTitle:gid("topTitle"),usbPermissionChip:gid("usbPermissionChip"),secureBanner:gid("secureBanner"),portText:gid("portText"),baudText:gid("baudText"),statusConfigBtn:gid("statusConfigBtn"),statusLabel:gid("statusLabel"),connectToggleBtn:gid("connectToggleBtn"),normalView:gid("normalView"),developerView:gid("developerView"),syncRtcBtn:gid("syncRtcBtn"),phoneDateText:gid("phoneDateText"),phoneTimeText:gid("phoneTimeText"),powerDateText:gid("powerDateText"),powerTimeText:gid("powerTimeText"),stateIdle:gid("stateIdle"),stateCharging:gid("stateCharging"),stateDischarging:gid("stateDischarging"),socRing:gid("socRing"),sohRing:gid("sohRing"),socValue:gid("socValue"),sohValue:gid("sohValue"),socStatusText:gid("socStatusText"),packVoltage:gid("packVoltage"),packCurrent:gid("packCurrent"),batteryTemperature:gid("batteryTemperature"),cycleCount:gid("cycleCount"),cellVoltage1:gid("cellVoltage1"),cellVoltage2:gid("cellVoltage2"),cellVoltage3:gid("cellVoltage3"),cellVoltage4:gid("cellVoltage4"),estimateChargeMinutes:gid("estimateChargeMinutes"),estimateDischargeMinutes:gid("estimateDischargeMinutes"),remainingCapacity:gid("remainingCapacity"),fullChargeCapacity:gid("fullChargeCapacity"),designCapacity:gid("designCapacity"),batteryType:gid("batteryType"),batteryVendor:gid("batteryVendor"),productionDate:gid("productionDate"),batchSerialNumber:gid("batchSerialNumber"),portInfoList:gid("portInfoList"),passthroughReadyText:gid("passthroughReadyText"),exitDevBtn:gid("exitDevBtn"),hexSendEnabled:gid("hexSendEnabled"),hexDisplayEnabled:gid("hexDisplayEnabled"),timedSendEnabled:gid("timedSendEnabled"),timedIntervalText:gid("timedIntervalText"),sendInput:gid("sendInput"),openCmdBtn:gid("openCmdBtn"),clearDevBtn:gid("clearDevBtn"),sendDevBtn:gid("sendDevBtn"),byteCounter:gid("byteCounter"),devLogBox:gid("devLogBox"),serialConfigModal:gid("serialConfigModal"),portSelectGrid:gid("portSelectGrid"),baudSelectGrid:gid("baudSelectGrid"),useCustomBaud:gid("useCustomBaud"),customBaudInput:gid("customBaudInput"),serialConfigError:gid("serialConfigError"),cancelSerialConfigBtn:gid("cancelSerialConfigBtn"),saveSerialConfigBtn:gid("saveSerialConfigBtn"),commandModal:gid("commandModal"),adminStateText:gid("adminStateText"),adminLoginBtn:gid("adminLoginBtn"),cmdGetAckBtn:gid("cmdGetAckBtn"),cmdGetInfoBtn:gid("cmdGetInfoBtn"),getDataTypeGrid:gid("getDataTypeGrid"),sendGetDataBtn:gid("sendGetDataBtn"),rtcFormatGrid:gid("rtcFormatGrid"),sendGetRtcBtn:gid("sendGetRtcBtn"),sendSetRtcBtn:gid("sendSetRtcBtn"),setRtcNote:gid("setRtcNote"),protPortTypeGrid:gid("protPortTypeGrid"),sendGetPortBtn:gid("sendGetPortBtn"),adminTestBlocked:gid("adminTestBlocked"),adminTestSection:gid("adminTestSection"),testParamGrid:gid("testParamGrid"),testParamRange:gid("testParamRange"),testDeviceValue:gid("testDeviceValue"),testResponseTip:gid("testResponseTip"),testQuickGrid:gid("testQuickGrid"),setTestValueInput:gid("setTestValueInput"),sendGetTestBtn:gid("sendGetTestBtn"),sendSetTestBtn:gid("sendSetTestBtn"),closeCommandModalBtn:gid("closeCommandModalBtn"),adminModal:gid("adminModal"),adminPasswordInput:gid("adminPasswordInput"),toggleAdminPasswordBtn:gid("toggleAdminPasswordBtn"),adminLoginError:gid("adminLoginError"),cancelAdminBtn:gid("cancelAdminBtn"),confirmAdminBtn:gid("confirmAdminBtn"),toastWrap:gid("toastWrap")};
-
-      function gid(id){return document.getElementById(id)}
-      function defBat(){return{packVoltage:"---",packCurrent:"---",batteryTemperature:"---",cycleCount:"---",cellVoltage1:"---",cellVoltage2:"---",cellVoltage3:"---",cellVoltage4:"---",estimateChargeMinutes:"---",estimateDischargeMinutes:"---",remainingCapacity:"---",fullChargeCapacity:"---",designCapacity:"---",batteryType:"---",batteryVendor:"---",productionDate:"---",batchSerialNumber:"---"}}
-      function defPorts(){const m=new Map();for(let i=0;i<PORT_COUNT;i++)m.set(i,{portId:i,enableKnown:false,portEnabled:false,hasData:false,lastErrorCode:null,realtimeOutputState:0,stableOutputState:0,typecMosEnabled:false,feedbackPortId:i,pdHandshakeOk:false,pdProtocolType:0,pdDataRole:0,negotiatedVoltageMv:0,negotiatedCurrentMa:0,backBoostVoltageMv:0,mosVoltageMv:0,mosVoltageRefreshed:false,portCurrentMa:0,portCurrentRefreshed:false,dpdmProtocolCode:0,protectionFlags:0});return m}
-      const d2=(n)=>String(n).padStart(2,"0");
-      const fDate=(ms)=>{const d=new Date(ms);return `${d.getFullYear()}-${d2(d.getMonth()+1)}-${d2(d.getDate())}`};
-      const fTime=(ms)=>{const d=new Date(ms);return `${d2(d.getHours())}:${d2(d.getMinutes())}:${d2(d.getSeconds())}`};
-      const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
-      const secure=()=>window.isSecureContext||location.hostname==="localhost"||location.hostname==="127.0.0.1";
-      function toast(msg,dur=800){if(!msg)return;const e=document.createElement("div");e.className="t";e.textContent=msg;el.toastWrap.appendChild(e);setTimeout(()=>e.remove(),dur)}
-      function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
-      function selectedName(){return app.selPort==null||app.selPort<0||app.selPort>=app.ports.length?"未接入":`端口${app.selPort}`}
-      function hasPerm(){return app.ports.length>0}
-      function updPerm(){el.usbPermissionChip.textContent=hasPerm()?"权限已授权":"权限未授权";el.usbPermissionChip.classList.toggle("ok",hasPerm())}
-      function updConnUI(){el.portText.textContent=`端口：${selectedName()}`;el.baudText.textContent=`波特率：${app.baud}`;el.statusLabel.textContent=app.isConnected?"已连接":"未连接";el.statusConfigBtn.classList.toggle("on",app.isConnected);el.connectToggleBtn.classList.toggle("on",app.isConnected);el.connectToggleBtn.textContent=app.isConnected?"🔌 断开":"🔌 连接";const ready=app.isConnected&&!!app.writer;el.passthroughReadyText.textContent=ready?"透传已连接":"透传未连接";el.passthroughReadyText.classList.toggle("ok",ready);updPerm()}
-      function lvlColor(v){v=Math.max(0,Math.min(100,Number(v)||0));const c=[{r:232,g:74,b:95},{r:255,g:138,b:72},{r:232,g:103,b:160},{r:90,g:149,b:255},{r:142,g:197,b:255}],mix=(a,b,t)=>`rgb(${Math.round(a.r+(b.r-a.r)*t)},${Math.round(a.g+(b.g-a.g)*t)},${Math.round(a.b+(b.b-a.b)*t)})`;if(v<=20)return mix(c[0],c[1],v/20);if(v<=45)return mix(c[1],c[2],(v-20)/25);if(v<=70)return mix(c[2],c[3],(v-45)/25);return mix(c[3],c[4],(v-70)/30)}
-      function renderRings(){const soc=Math.max(0,Math.min(100,app.soc)),soh=Math.max(0,Math.min(100,app.soh)),sc=lvlColor(soc),hc=lvlColor(soh);el.socRing.style.setProperty("--v",String(soc));el.socRing.style.setProperty("--c",sc);el.sohRing.style.setProperty("--v",String(soh));el.sohRing.style.setProperty("--c",hc);el.socValue.textContent=`${soc}%`;el.sohValue.textContent=`${soh}%`;el.stateIdle.classList.toggle("on",app.status===0);el.stateCharging.classList.toggle("on",app.status===1);el.stateDischarging.classList.toggle("on",app.status===2);el.socStatusText.textContent=app.status===1?(soc>=100?"已充满":"充电中..."):(app.status===2?"放电中":"待机中")}
-      function renderTime(){el.phoneDateText.textContent=fDate(app.phoneMs);el.phoneTimeText.textContent=fTime(app.phoneMs);el.powerDateText.textContent=fDate(app.pbMs);el.powerTimeText.textContent=fTime(app.pbMs)}
-      function renderBat(){const d=app.bat;el.packVoltage.textContent=d.packVoltage;el.packCurrent.textContent=d.packCurrent;el.batteryTemperature.textContent=d.batteryTemperature;el.cycleCount.textContent=d.cycleCount;el.cellVoltage1.textContent=d.cellVoltage1;el.cellVoltage2.textContent=d.cellVoltage2;el.cellVoltage3.textContent=d.cellVoltage3;el.cellVoltage4.textContent=d.cellVoltage4;el.estimateChargeMinutes.textContent=d.estimateChargeMinutes;el.estimateDischargeMinutes.textContent=d.estimateDischargeMinutes;el.remainingCapacity.textContent=d.remainingCapacity;el.fullChargeCapacity.textContent=d.fullChargeCapacity;el.designCapacity.textContent=d.designCapacity;el.batteryType.textContent=d.batteryType;el.batteryVendor.textContent=d.batteryVendor;el.productionDate.textContent=d.productionDate;el.batchSerialNumber.textContent=d.batchSerialNumber}
-      const protErr=(e)=>e==null?"正常":(e===0x00?"参数输入错误":(e===0x01?"端口未使能":`错误0x${e.toString(16).toUpperCase().padStart(2,"0")}`));
-      const outState=(s)=>s===1?"SOURCE":(s===2?"SINK":"NONE");
-      const pdProto=(t)=>t===1?"SPR_PPS":(t===2?"EPR_AVS":(t===3?"SPR_AVS":"FIXED"));
-      const pdRole=(r)=>r===1?"DFP":"UFP";
-      function dpdm(c){const m={1:"APPLE",2:"SDP",3:"CDP",4:"DCP",5:"HVDCP",6:"HVDCP1MS",7:"QC2_5V",8:"QC2_9V",9:"QC2_12V",10:"QC2_20V",11:"QC3",12:"AFC",13:"FCP",14:"SCP",15:"VOOC",16:"UART",17:"UFCS",18:"VFCP",19:"TFCP_B",20:"TFCP_DE"};return m[c]||"NONE"}
-      function renderPorts(){const arr=[];for(let i=0;i<PORT_COUNT;i++)arr.push(app.portsInfo.get(i));el.portInfoList.innerHTML="";arr.forEach((p,i)=>{const disabled=p.enableKnown&&!p.portEnabled,base=disabled||!p.hasData,raw=outState(p.stableOutputState),none=!base&&raw==="NONE",ph=base||none,txt=(v)=>ph?"---":v,num=(v)=>ph?"---":String(v),canPower=!ph&&p.mosVoltageRefreshed&&p.portCurrentRefreshed,pwr=canPower?String(Math.floor((Number(p.mosVoltageMv)*Number(p.portCurrentMa))/1000)):"---",pdRaw=pdProto(p.pdProtocolType),dpRaw=dpdm(p.dpdmProtocolCode),hRaw=p.pdHandshakeOk?pdRaw:dpRaw,hTxt=txt(hRaw),role=txt(pdRole(p.pdDataRole)),stable=txt(raw),direct=pdRaw==="SPR_PPS"||pdRaw==="EPR_AVS"||pdRaw==="SPR_AVS",fix=pdRaw==="FIXED"&&p.negotiatedVoltageMv>7000,noPd=!p.pdHandshakeOk&&p.negotiatedVoltageMv>7000,hi=ph?false:(p.pdHandshakeOk?(direct||fix):noPd),sc=p.lastErrorCode!=null?"#ffb7c4":(disabled||!p.hasData?"var(--muted)":"var(--neon)"),st=p.lastErrorCode!=null?protErr(p.lastErrorCode):(disabled?"未使能":(p.hasData?"已更新":"未刷新"));const card=document.createElement("div");card.className="pc";card.innerHTML=`<div class="ph"><div class="pt">端口${p.portId}</div><div class="ps" style="color:${sc}">${st}</div></div><div class="tiny"><div>电源角色：${stable}</div><div>数据角色：${role}</div></div><div class="psub"><div class="hs" style="color:${hi?"var(--ok)":"var(--neon)"}"><div style="display:flex;align-items:center;gap:4px"><span class="bolt ${hi?"on":""}">⚡</span><span>握手协议:</span></div><div style="text-align:center">${hTxt}</div><div></div></div></div><div class="psub"><div class="tiny" style="font-size:11px;color:var(--neon)"><div>协商电压: ${num(p.negotiatedVoltageMv)} mV</div><div>协商电流: ${num(p.negotiatedCurrentMa)} mA</div></div><div class="line" style="opacity:.2;margin:0"></div><div class="kv"><div class="k">当前电压:</div><div class="v">${num(p.mosVoltageMv)}</div><div class="u">mV</div></div><div class="kv"><div class="k">当前电流:</div><div class="v">${num(p.portCurrentMa)}</div><div class="u">mA</div></div><div class="kv"><div class="k">当前功率:</div><div class="v">${pwr}</div><div class="u">mW</div></div></div>`;el.portInfoList.appendChild(card);if(i<arr.length-1){const sp=document.createElement("div");sp.className="line";sp.style.opacity=".32";sp.style.margin="2px 4px";el.portInfoList.appendChild(sp)}})}
-      function renderCounter(){el.byteCounter.textContent=`发送字节：${app.tx}    接收字节：${app.rx}`}
-      const hex=(a)=>Array.from(a,(b)=>(b&255).toString(16).toUpperCase().padStart(2,"0")).join(" ");
-      function txt(a){try{return new TextDecoder().decode(a)}catch(_){return""}}
-      function renderLogs(){if(!app.logs.length){el.devLogBox.innerHTML='<div class="le">暂无透传数据</div>';return}el.devLogBox.innerHTML=app.logs.map((l)=>`<div class="li ${l.dir==="发送"?"tx":"rx"}"><span class="dim">[${fDate(l.ts)} ${fTime(l.ts)}] [${l.dir}]</span>\n${esc(app.hexShow?hex(l.p):txt(l.p))}</div>`).join("");el.devLogBox.scrollTop=el.devLogBox.scrollHeight}
-      function renderDev(){el.normalView.style.display=app.dev?"none":"flex";el.developerView.style.display=app.dev?"flex":"none"}
-      function render(){updConnUI();renderTime();renderRings();renderBat();renderPorts();renderCounter();renderLogs();renderDev()}
-      function parseHex(s){const c=String(s||"").replace(/\s+/g,"").trim();if(!c)return new Uint8Array(0);if(!/^[0-9a-fA-F]+$/.test(c)||c.length%2)return null;const o=new Uint8Array(c.length/2);for(let i=0;i<c.length;i+=2)o[i/2]=parseInt(c.slice(i,i+2),16);return o}
-      function addLog(dir,p){const cp=p instanceof Uint8Array?p.slice():new Uint8Array(p);app.logs.push({dir,ts:Date.now(),p:cp});if(app.logs.length>500)app.logs=app.logs.slice(-500);if(dir==="发送")app.tx+=cp.length;else app.rx+=cp.length;renderCounter();renderLogs()}
-      function curLine(){const c=Array.from(document.querySelectorAll('input[name="lineEnding"]')).find((x)=>x.checked);return c?Number(c.value):0}
-      function buildSend(){if(!app.sendInput.trim())return new Uint8Array(0);let b=app.hexSend?parseHex(app.sendInput):new TextEncoder().encode(app.sendInput);if(b==null)return null;let e=new Uint8Array(0);if(app.lineMode===1)e=new Uint8Array([0x0A]);else if(app.lineMode===2)e=new Uint8Array([0x0D,0x0A]);if(!e.length)return b;const o=new Uint8Array(b.length+e.length);o.set(b,0);o.set(e,b.length);return o}
-      const nano=()=>Math.floor(performance.now()*1e6);
-      async function throttle(){const min=MIN_CMD_MS*1e6,now=nano(),elap=now-app.lastCmdNano;if(app.lastCmdNano&&elap>=0&&elap<min){const w=Math.ceil((min-elap)/1e6);if(w>0)await sleep(w)}app.lastCmdNano=nano()}
-      async function qwrite(bytes,th=false){app.writeQ=app.writeQ.catch(()=>undefined).then(async()=>{if(!app.writer)throw new Error("writer missing");if(th)await throttle();await app.writer.write(bytes)});return app.writeQ}
-      function crc8(p){let crc=0xFF;for(let i=0;i<p.length;i++){crc^=p[i]&255;for(let b=0;b<8;b++)crc=((crc&0x80)!==0)?(((crc<<1)^0x07)&255):((crc<<1)&255)}return crc&255}
-      function pkt(cmd,data){const d=data.length>1024?data.slice(0,1024):data,len=d.length,ll=len&255,lh=(len>>8)&255,inb=new Uint8Array(3+len);inb[0]=cmd&255;inb[1]=ll;inb[2]=lh;if(len)inb.set(d,3);const c=crc8(inb),o=new Uint8Array(2+1+2+len+1);o[0]=0xAA;o[1]=0xBB;o[2]=cmd&255;o[3]=ll;o[4]=lh;if(len)o.set(d,5);o[o.length-1]=c;return o}
-      function bufAdd(buf,bytes){for(let i=0;i<bytes.length;i++)buf.push(bytes[i]&255);if(buf.length>4096){const keep=buf.slice(Math.max(0,buf.length-256));buf.length=0;buf.push(...keep)}}
-      function extract(buf){const fs=[];let idx=0;while(idx+6<=buf.length){if((buf[idx]&255)!==0xAA||(buf[idx+1]&255)!==0xBB){idx++;continue}const cmd=buf[idx+2]&255,len=(buf[idx+3]&255)|((buf[idx+4]&255)<<8);if(len<0||len>1024){idx++;continue}const size=2+1+2+len+1;if(idx+size>buf.length)break;const ci=new Uint8Array(3+len);ci[0]=buf[idx+2]&255;ci[1]=buf[idx+3]&255;ci[2]=buf[idx+4]&255;for(let i=0;i<len;i++)ci[3+i]=buf[idx+5+i]&255;const ex=buf[idx+size-1]&255;if(crc8(ci)!==ex){idx++;continue}const p=new Uint8Array(len);for(let i=0;i<len;i++)p[i]=buf[idx+5+i]&255;fs.push([cmd,p]);idx+=size}if(idx>0)buf.splice(0,idx);if(buf.length>4096){const keep=buf.slice(Math.max(0,buf.length-256));buf.length=0;buf.push(...keep)}return fs}
-      function leInt(raw,signed=false){if(!raw||!raw.length)return null;const sz=Math.min(raw.length,4);let v=0;for(let i=0;i<sz;i++)v|=(raw[i]&255)<<(i*8);if(!signed)return v>>>0;const bits=sz*8,sign=1<<(bits-1),range=2**bits;return(v&sign)?(v-range):v}
-      function ascii(raw){if(!raw||!raw.length)return null;const t=new TextDecoder("ascii",{fatal:false}).decode(raw).replace(/\u0000/g," ").trim();return t||null}
-      function normDate(s){const d=String(s||"").replace(/\D+/g,"");return d.length===8?`${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`:s}
-      const m2u=(m)=>(Number(m)/1000).toFixed(2);
-      const d2u=(v)=>{const n=Number(v)||0,sg=n<0?"-":"",a=Math.abs(n);return`${sg}${Math.floor(a/10)}.${a%10}`};
-      function rtc(raw){if(!raw||!raw.length)return null;const min=0,max=4102444800000,minS=Math.floor(min/1000),maxS=Math.floor(max/1000),c=[];const addS=(s)=>{if(s>=minS&&s<=maxS)c.push(s*1000-BEIJING_OFFSET)},addM=(m)=>{if(m>=min&&m<=max)c.push(m-BEIJING_OFFSET)};const u32le=(o)=>((raw[o]&255)|((raw[o+1]&255)<<8)|((raw[o+2]&255)<<16)|((raw[o+3]&255)*2**24))>>>0,u32be=(o)=>(((raw[o]&255)*2**24)|((raw[o+1]&255)<<16)|((raw[o+2]&255)<<8)|(raw[o+3]&255))>>>0;const u64le=(o)=>{let v=0n;for(let i=0;i<8;i++)v|=BigInt(raw[o+i]&255)<<BigInt(i*8);return v},u64be=(o)=>{let v=0n;for(let i=0;i<8;i++)v=(v<<8n)|BigInt(raw[o+i]&255);return v};const struct=(o)=>{if(o+8>=raw.length||(raw[o]&255)!==0x00)return null;const y=(raw[o+1]&255)|((raw[o+2]&255)<<8),m=raw[o+3]&255,d=raw[o+4]&255,h=raw[o+6]&255,mi=raw[o+7]&255,s=raw[o+8]&255;if(y<2000||y>2100||m<1||m>12||d<1||d>31||h>23||mi>59||s>59)return null;return Date.UTC(y,m-1,d,h-8,mi,s,0)};const ds=Array.from(raw,(b)=>{const ch=String.fromCharCode(b&255);return/\d/.test(ch)?ch:" "}).join("");(ds.match(/\d{10,13}/g)||[]).forEach((m)=>{const v=Number(m);if(!Number.isFinite(v))return;m.length>=13?addM(v):addS(v)});for(let o=0;o<raw.length;o++){const f=raw[o]&255;if(f===0x01&&o+4<raw.length){addS(u32le(o+1));addS(u32be(o+1))}const st=struct(o);if(st!=null)c.push(st)}if(raw.length>=4){for(let o=0;o<=raw.length-4;o++){const l=u32le(o),b=u32be(o);addS(l);addS(b);addM(l);addM(b)}}if(raw.length>=8){for(let o=0;o<=raw.length-8;o++){const l=u64le(o),b=u64be(o),ln=l<=BigInt(Number.MAX_SAFE_INTEGER)?Number(l):Number.MAX_SAFE_INTEGER,bn=b<=BigInt(Number.MAX_SAFE_INTEGER)?Number(b):Number.MAX_SAFE_INTEGER;addS(ln);addS(bn);addM(ln);addM(bn)}}if(!c.length)return null;const now=Date.now();let best=c[0],diff=Math.abs(best-now);for(let i=1;i<c.length;i++){const d=Math.abs(c[i]-now);if(d<diff){best=c[i];diff=d}}return best}
-      function decodePort(raw,req){if(!raw||raw.length<15)return null;const mask=raw[0]&255,off=1,b0=raw[off]&255,b1=raw[off+1]&255,r16=(i)=>(raw[off+i]&255)|((raw[off+i+1]&255)<<8),fb=(b0>>5)&0x03,t=(req!=null&&req>=0&&req<PORT_COUNT)?req:fb,en=((mask>>t)&1)===1;if(!en)return{portId:t,enableKnown:true,portEnabled:false,hasData:false,lastErrorCode:null,feedbackPortId:t};return{portId:t,enableKnown:true,portEnabled:true,hasData:true,lastErrorCode:null,realtimeOutputState:b0&0x03,stableOutputState:(b0>>2)&0x03,typecMosEnabled:((b0>>4)&1)===1,feedbackPortId:fb,pdHandshakeOk:(b1&1)===1,pdProtocolType:(b1>>1)&0x03,pdDataRole:(b1>>3)&0x01,negotiatedVoltageMv:r16(2),negotiatedCurrentMa:r16(4),backBoostVoltageMv:r16(6),mosVoltageMv:r16(8),mosVoltageRefreshed:true,portCurrentMa:r16(10),portCurrentRefreshed:true,dpdmProtocolCode:raw[off+12]&255,protectionFlags:raw[off+13]&255}}
-      const popData=()=>app.pendingData.length?app.pendingData.shift():null,popPort=()=>app.pendingPort.length?app.pendingPort.shift():null;
-      function enqData(t){const i=app.pendingData.indexOf(t);if(i>=0)app.pendingData.splice(i,1);app.pendingData.push(t)}
-      function enqPort(p){const v=Math.max(0,Math.min(PORT_COUNT-1,Number(p)||0)),i=app.pendingPort.indexOf(v);if(i>=0)app.pendingPort.splice(i,1);app.pendingPort.push(v)}
-      function onDataFrame(rawCmd,p){const cmd=rawCmd&0x7F;if(cmd===CMD_RTC){const d=rtc(p);if(d!=null){app.pbMs=d;renderTime()}return}if(cmd===CMD_DATA){const fb=popData(),dt=(p.length>=2?(p[0]&255):null),has=dt!=null&&dt>=0&&dt<=DT_MAX,t=has?dt:fb;if(t==null)return;const vr=has?p.slice(1):p,vu=leInt(vr,false),d=app.bat;switch(t){case DT_TEMP:if(vu==null)return;app.bat={...d,batteryTemperature:d2u(vu)};break;case DT_VOLT:if(vu==null)return;app.bat={...d,packVoltage:m2u(vu)};break;case DT_C1:if(vu==null)return;app.bat={...d,cellVoltage1:m2u(vu)};break;case DT_C2:if(vu==null)return;app.bat={...d,cellVoltage2:m2u(vu)};break;case DT_CUR:{const vs=leInt(vr,true);if(vs==null)return;app.bat={...d,packCurrent:m2u(vs)};break}case DT_RC:if(vu==null)return;app.bat={...d,remainingCapacity:String(vu)};break;case DT_FC:if(vu==null)return;app.bat={...d,fullChargeCapacity:String(vu)};break;case DT_DC:if(vu==null)return;app.bat={...d,designCapacity:String(vu)};app.pendingStatic.delete(DT_DC);break;case DT_TTE:if(vu==null)return;app.bat={...d,estimateDischargeMinutes:String(vu)};break;case DT_TTF:if(vu==null)return;app.bat={...d,estimateChargeMinutes:String(vu)};break;case DT_CYCLE:if(vu==null)return;app.bat={...d,cycleCount:String(vu)};break;case DT_SOC:if(vu==null)return;app.soc=Math.max(0,Math.min(100,vu));break;case DT_SOH:if(vu==null)return;app.soh=Math.max(0,Math.min(100,vu));break;case DT_COUNT:break;case DT_TYPE:{const v=ascii(vr);if(!v)return;app.bat={...d,batteryType:v};app.pendingStatic.delete(DT_TYPE);break}case DT_VENDOR:{const v=ascii(vr);if(!v)return;app.bat={...d,batteryVendor:v};app.pendingStatic.delete(DT_VENDOR);break}case DT_DATE:{const v=ascii(vr);if(!v)return;app.bat={...d,productionDate:normDate(v)};app.pendingStatic.delete(DT_DATE);break}case DT_STATUS:if(vu==null)return;{const m=vu===0?0:(vu===1?2:(vu===2?1:null));if(m!=null)app.status=m}break;default:break}renderBat();renderRings();return}if(cmd===CMD_PORT){const req=popPort();if(p.length===1){const e=p[0]&255;if(req!=null){const old=app.portsInfo.get(req)||{};app.portsInfo.set(req,{...old,hasData:false,lastErrorCode:e,mosVoltageRefreshed:false,portCurrentRefreshed:false});renderPorts()}return}const dec=decodePort(p,req);if(!dec)return;const t=dec.portId,old=app.portsInfo.get(t)||{};app.portsInfo.set(t,{...old,...dec,portId:t,lastErrorCode:null});renderPorts()}}
-      function getSelTest(){return TEST_OPTS.find((x)=>x.id===app.testSel)||TEST_OPTS[0]}
-      function applyTestVal(pid,v,src){const n=pid===0x00?(v===0?0:1):v;app.testMap.set(pid,n);if(pid===0x00)app.ltVal=n===0?1:0;else if(app.testSel===pid&&app.testVal!==String(n))app.testVal=String(n);const op=TEST_OPTS.find((x)=>x.id===pid);const lb=op?op.label:`参数0x${(pid&255).toString(16).toUpperCase().padStart(2,"0")}`;app.testTip=`${src}：${lb} = ${n}`;renderTestUi()}
-      function onTestFrame(rawCmd,p){const cmd=rawCmd&0x7F;if(cmd===CMD_GET_TEST){if(!p.length)return;if(p.length===1&&(p[0]&255)===0x00){app.testTip="获取测试数据失败：参数错误";toast(app.testTip);renderTestUi();return}const pid=p[0]&255;if(pid===0x00){if(p.length>=2)applyTestVal(pid,p[1]&255,"设备回复")}else if(pid===0x01){if(p.length>=3)applyTestVal(pid,(p[1]&255)|((p[2]&255)<<8),"设备回复")}return}if(cmd===CMD_SET_TEST){if(!p.length)return;if((p[0]&255)===0x01){app.testTip="发送测试数据成功，正在同步设备值";renderTestUi();sendGetTest(app.lastTestReq,false)}else if((p[0]&255)===0x00){app.testTip="发送测试数据失败：参数错误";renderTestUi();toast(app.testTip)}}}
-      function feedData(bytes){if(!bytes||!bytes.length)return;bufAdd(app.bufData,bytes);extract(app.bufData).forEach(([c,p])=>onDataFrame(c,p))}
-      function feedTest(bytes){if(!bytes||!bytes.length)return;bufAdd(app.bufTest,bytes);extract(app.bufTest).forEach(([c,p])=>onTestFrame(c,p))}
-      const bjSec=()=>Math.max(0,Math.min(0xFFFFFFFF,Math.floor((Date.now()+BEIJING_OFFSET)/1000)));
-      function bjParts(){const utc=Date.now()+new Date().getTimezoneOffset()*60000,bj=utc+BEIJING_OFFSET,d=new Date(bj);return{y:d.getUTCFullYear(),m:d.getUTCMonth()+1,d:d.getUTCDate(),w:(d.getUTCDay()+6)%7,h:d.getUTCHours(),mi:d.getUTCMinutes(),s:d.getUTCSeconds()}}
-      function setRtcPayload(){if(app.setRtcFmt===0){const n=bjParts();return new Uint8Array([0x00,n.y&255,(n.y>>8)&255,n.m&255,n.d&255,n.w&255,n.h&255,n.mi&255,n.s&255])}const s=bjSec();return new Uint8Array([0x01,s&255,(s>>8)&255,(s>>16)&255,(s>>24)&255])}
-      function setRtcUnix(){const s=bjSec();return new Uint8Array([0x01,s&255,(s>>8)&255,(s>>16)&255,(s>>24)&255])}
-      async function sendRaw(payload,tip,msg,th=false){if(!app.isConnected||!app.writer){if(tip)toast("未连接设备，无法发送");return false}if(!payload||!payload.length){if(tip)toast("发送内容为空");return false}try{let off=0;while(off<payload.length){const end=Math.min(off+256,payload.length);await qwrite(payload.slice(off,end),th);off=end}addLog("发送",payload);if(tip)toast(msg||`已发送${payload.length}字节`);return true}catch(_){if(tip)toast("发送失败，请检查设备连接");await disconn("透传通道已断开，请重新连接",false);return false}}
-      async function sendCmd(name,cmd,data=new Uint8Array()){const p=pkt(cmd,data);return sendRaw(p,true,`${name} 已发送(${p.length}字节)`,true)}
-      async function sendData(cmd,data=new Uint8Array(),ed=null,ep=null){if(!app.isConnected||!app.writer)return false;const p=pkt(cmd,data);try{let off=0;while(off<p.length){const end=Math.min(off+256,p.length);await qwrite(p.slice(off,end),true);off=end}if(ed!=null)enqData(ed);if(ep!=null)enqPort(ep);return true}catch(_){await disconn("透传通道已断开，请重新连接",false);return false}}
-      async function sendNow(tip){app.sendInput=el.sendInput.value||"";const p=buildSend();if(p==null){if(tip)toast("HEX格式错误，请输入偶数字节");return}await sendRaw(p,tip,null,false)}
-      function resetData(){app.soc=0;app.soh=0;app.status=0;app.pbMs=app.pbDefault;app.bat=defBat();app.pendingStatic=new Set(STATIC_TYPES);app.portsInfo=defPorts();app.pendingData=[];app.pendingPort=[];app.bufData=[];app.bufTest=[];render()}
-      async function readLoop(){if(!app.activePort||!app.activePort.readable)return;app.readActive=true;try{app.reader=app.activePort.readable.getReader();while(app.readActive){const {value,done}=await app.reader.read();if(done)break;if(value&&value.length){const c=value instanceof Uint8Array?value:new Uint8Array(value);addLog("接收",c);feedTest(c);feedData(c)}}}catch(_){if(app.readActive)await disconn("透传通道已断开，请重新连接",false)}finally{if(app.reader){try{app.reader.releaseLock()}catch(_){}}app.reader=null}}
-      async function openSel(show=true){if(!app.supported){if(show)toast("当前浏览器不支持 Web Serial API");return false}if(app.selPort==null||app.selPort<0||app.selPort>=app.ports.length){if(show)toast("未选择USB端口");return false}const p=app.ports[app.selPort];if(!p){if(show)toast("未找到USB设备，无法连接");return false}if(app.activePort&&app.activePort===p&&app.writer)return true;await cleanup(false);try{await p.open({baudRate:app.baud,dataBits:8,stopBits:1,parity:"none",flowControl:"none"})}catch(_){if(show)toast("串口初始化失败，请检查设备类型与波特率");return false}app.activePort=p;app.writer=p.writable?p.writable.getWriter():null;app.isConnected=!!app.writer;app.lastCmdNano=0;app.writeQ=Promise.resolve();updConnUI();if(!app.writer){if(show)toast("透传通道未就绪，请检查USB权限和串口");return false}readLoop();startPoll();return true}
-      async function cleanup(reset){app.readActive=false;stopPoll();stopTimed();if(app.reader){try{await app.reader.cancel()}catch(_){ }try{app.reader.releaseLock()}catch(_){ }app.reader=null}if(app.writer){try{app.writer.releaseLock()}catch(_){ }app.writer=null}if(app.activePort){try{await app.activePort.close()}catch(_){ }app.activePort=null}app.isConnected=false;app.lastCmdNano=0;app.writeQ=Promise.resolve();if(reset)resetData();updConnUI()}
-      async function disconn(msg,reset=true){await cleanup(reset);if(msg)toast(msg)}
-      async function conn(prefer=null,msg=null){if(!app.ports.length){app.isConnected=false;resetData();toast("未接入设备，无法连接");return false}if(prefer!=null&&prefer>=0&&prefer<app.ports.length)app.selPort=prefer;if(app.selPort==null||app.selPort<0||app.selPort>=app.ports.length)app.selPort=0;const ok=await openSel(false);if(ok&&msg)toast(msg);updConnUI();return ok}
-      function stopPoll(){app.dataToken++;app.portToken++}
-      function startPoll(){stopPoll();if(!app.isConnected||app.dev)return;const dt=++app.dataToken,pt=++app.portToken;(async()=>{while(dt===app.dataToken&&app.isConnected&&!app.dev){const st=Date.now();await sendData(CMD_ACK);await sleep(5);await sendData(CMD_RTC,new Uint8Array([0x01]));const types=[...DYNAMIC_TYPES];STATIC_TYPES.forEach((t)=>{if(app.pendingStatic.has(t))types.push(t)});for(let i=0;i<types.length;i++){await sleep(i===0?5:3);const t=types[i];await sendData(CMD_DATA,new Uint8Array([t&255]),t,null)}await sleep(Math.max(0,1000-(Date.now()-st)))}})();(async()=>{while(pt===app.portToken&&app.isConnected&&!app.dev){const st=Date.now();for(let p=0;p<PORT_COUNT;p++){if(p>0)await sleep(5);await sendData(CMD_PORT,new Uint8Array([p&255]),null,p)}await sleep(Math.max(0,400-(Date.now()-st)))}})()}
-      function stopTimed(){if(app.timedTimer){clearInterval(app.timedTimer);app.timedTimer=null}}
-      function restartTimed(){stopTimed();if(!app.timed)return;const iv=Math.max(100,Math.min(60000,Number.parseInt(app.timedText,10)||1000));app.timedTimer=setInterval(()=>{if(app.timed)sendNow(false)},iv)}
-      async function refreshPorts(){if(!app.supported)return;let ps=[];try{ps=await navigator.serial.getPorts()}catch(_){ps=[]}const prevPorts=app.ports.slice();app.ports=ps;const sigCount=(list)=>{const m=new Map();list.forEach((p)=>{const i=(typeof p.getInfo==="function")?p.getInfo():{};const key=`${i.usbVendorId??"na"}:${i.usbProductId??"na"}`;m.set(key,(m.get(key)||0)+1)});return m};const prevSig=sigCount(prevPorts),nextSig=sigCount(app.ports),hasNewPort=[...nextSig.entries()].some(([k,v])=>v>(prevSig.get(k)||0));if(app.selPort==null||app.selPort>=app.ports.length)app.selPort=app.ports.length?0:null;if(app.activePort&&!app.ports.includes(app.activePort))await disconn("USB设备已断开，连接已关闭",true);if(hasNewPort&&!app.isConnected)await conn(0,"检测到新USB端口，已自动开启连接");updConnUI()}
-      async function reqPort(){if(!app.supported){toast("当前浏览器不支持 Web Serial API");return}try{const p=await navigator.serial.requestPort();if(!app.ports.includes(p))app.ports.push(p);app.selPort=app.ports.indexOf(p);updConnUI();toast("USB权限已授予，开始透传")}catch(e){if(e&&e.name==="NotFoundError")return;toast("请求USB权限失败，请重试")}}
-      function updCfg(){el.portSelectGrid.innerHTML="";if(!app.ports.length){const t=document.createElement("div");t.className="note";t.style.color="#ffb7c4";t.textContent="未检测到Type-C端口，请先接入设备";el.portSelectGrid.appendChild(t)}else app.ports.forEach((_,i)=>{const b=document.createElement("button");b.type="button";b.className=`c ${app.selPort===i?"on":""}`;b.textContent=`端口${i}`;b.onclick=()=>{app.selPort=i;updCfg()};el.portSelectGrid.appendChild(b)});el.baudSelectGrid.innerHTML="";app.common.forEach((bd)=>{const on=!app.useCustom&&app.baud===bd;const b=document.createElement("button");b.type="button";b.className=`c ${on?"on":""}`;b.textContent=String(bd);b.onclick=()=>{app.useCustom=false;app.baud=bd;el.useCustomBaud.checked=false;el.customBaudInput.value="";el.serialConfigError.textContent="";updCfg()};el.baudSelectGrid.appendChild(b)});el.useCustomBaud.checked=app.useCustom;el.customBaudInput.value=app.useCustom?String(app.baud):""}
-      const openCfg=()=>{updCfg();el.serialConfigError.textContent="";el.serialConfigModal.classList.add("show")};
-      const closeCfg=()=>el.serialConfigModal.classList.remove("show");
-      const normBaud=(s)=>String(s||"").replace(/\s+/g,"").trim();
-      async function saveCfg(){let fb;if(el.useCustomBaud.checked){const n=normBaud(el.customBaudInput.value);if(!/^\d{1,7}$/.test(n)){el.serialConfigError.textContent="请输入数字波特率";return}const p=Number.parseInt(n,10);if(!Number.isFinite(p)||p<300||p>3000000){el.serialConfigError.textContent="波特率范围需在300到3000000之间";return}fb=p;app.useCustom=true}else{fb=app.baud;app.useCustom=false}app.baud=fb;closeCfg();updConnUI();if(app.isConnected)await disconn("连接参数已更新，请重新连接",false)}
-      function devMode(on){app.dev=on;renderDev();if(on){stopPoll();toast("已进入开发者模式")}else{startPoll();toast("已退出开发者模式")}}
-      function titleTap(){if(app.dev)return;const n=Date.now();app.tapCount=(n-app.lastTap<=DEV_TAP_MS)?app.tapCount+1:1;app.lastTap=n;if(app.tapCount===3)toast("再点击2次进入开发者模式");if(app.tapCount===4)toast("再点击1次进入开发者模式");if(app.tapCount>=5){app.tapCount=0;devMode(true)}}
-      function cmdSel(){el.getDataTypeGrid.innerHTML="";GET_DATA_OPTS.forEach(([v,l])=>{const b=document.createElement("button");b.type="button";b.className=`c ${app.getDataType===v?"on":""}`;b.textContent=l;b.onclick=()=>{app.getDataType=v;cmdSel()};el.getDataTypeGrid.appendChild(b)});el.rtcFormatGrid.innerHTML="";RTC_OPTS.forEach(([v,l])=>{const on=app.getRtcFmt===v||app.setRtcFmt===v;const b=document.createElement("button");b.type="button";b.className=`c ${on?"on":""}`;b.textContent=l;b.onclick=()=>{app.getRtcFmt=v;app.setRtcFmt=v;cmdSel()};el.rtcFormatGrid.appendChild(b)});el.protPortTypeGrid.innerHTML="";PORT_OPTS.forEach(([v,l])=>{const b=document.createElement("button");b.type="button";b.className=`c ${app.protType===v?"on":""}`;b.textContent=l;b.onclick=()=>{app.protType=v;cmdSel()};el.protPortTypeGrid.appendChild(b)});el.setRtcNote.textContent=app.setRtcFmt===0?"SET_RTC将直接发送北京时间（正常时间格式）":"SET_RTC将直接发送北京时间Unix时间戳（秒）"}
-      function renderTestUi(){const show=app.admin;el.adminStateText.style.display=show?"block":"none";el.adminLoginBtn.style.display=show?"none":"inline-block";el.adminTestBlocked.style.display=show?"none":"block";el.adminTestSection.style.display=show?"block":"none";if(!show)return;const sel=getSelTest(),dv=app.testMap.has(sel.id)?app.testMap.get(sel.id):null;if(sel.id===0x00)app.testVal=String(app.ltVal);else if(dv!=null)app.testVal=String(dv);el.testParamGrid.innerHTML="";TEST_OPTS.forEach((o)=>{const b=document.createElement("button");b.type="button";b.className=`c ${app.testSel===o.id?"on":""}`;b.textContent=o.label;b.onclick=()=>{app.testSel=o.id;const val=app.testMap.has(o.id)?app.testMap.get(o.id):o.def;app.testVal=String(val);renderTestUi()};el.testParamGrid.appendChild(b)});el.testParamRange.textContent=`当前参数ID: 0x${(sel.id&255).toString(16).toUpperCase().padStart(2,"0")}    取值范围: ${sel.min}-${sel.max}${sel.unit}`;el.testDeviceValue.textContent=`设备当前值: ${(dv!=null?dv:"---")}${sel.unit}`;el.testResponseTip.textContent=app.testTip;el.testQuickGrid.innerHTML="";sel.quick.forEach((it)=>{const on=sel.id===0x00?app.ltVal===it.v:Number.parseInt(app.testVal,10)===it.v;const b=document.createElement("button");b.type="button";b.className=`c ${on?"on":""}`;b.textContent=`${it.l}${sel.unit}`;b.onclick=()=>{if(sel.id===0x00)app.ltVal=it.v;else app.testVal=String(it.v);renderTestUi()};el.testQuickGrid.appendChild(b)});if(sel.id===0x00){el.setTestValueInput.style.display="none"}else{el.setTestValueInput.style.display="block";el.setTestValueInput.placeholder=`SET_TEST数值（${sel.min}-${sel.max}${sel.unit}）`;el.setTestValueInput.value=app.testVal}}
-      async function sendTestPkt(packet,tip,msg){if(!app.isConnected){if(tip)toast("未连接设备，无法发送");return false}if(!app.writer){if(tip)toast("透传通道未就绪，请先连接设备并授权USB");return false}return sendRaw(packet,tip,msg,true)}
-      async function sendGetTest(pid,tip=true){app.lastTestReq=pid;app.testTip="已发送获取请求，等待设备回复...";renderTestUi();const p=pkt(CMD_GET_TEST,new Uint8Array([pid&255]));await sendTestPkt(p,tip,`获取测试数据 已发送(${p.length}字节)`)}
-      async function sendSetTest(pid,val,tip=true){app.lastTestReq=pid;app.testTip="已发送设置请求，等待设备确认...";renderTestUi();const pl=pid===0x00?new Uint8Array([pid&255,val&255]):new Uint8Array([pid&255,val&255,(val>>8)&255]);const p=pkt(CMD_SET_TEST,pl);await sendTestPkt(p,tip,`发送测试数据 已发送(${p.length}字节)`)}
-      async function syncRtc(){if(!app.isConnected){toast("未连接设备，无法同步RTC");return}if(!app.writer){toast("透传未就绪，RTC同步失败");return}const sent=await sendData(CMD_SET_RTC,setRtcUnix());if(!sent){toast("发送 SET_RTC 失败");return}await sendData(CMD_RTC,new Uint8Array([0x01]));toast("RTC同步成功")}
-      function openCmd(){cmdSel();renderTestUi();el.commandModal.classList.add("show")}
-      function closeCmd(){el.commandModal.classList.remove("show");el.adminModal.classList.remove("show")}
-      function openAdmin(){app.pwdInput="";app.pwdShow=false;app.pwdErr="";el.adminPasswordInput.type="password";el.adminPasswordInput.value="";el.toggleAdminPasswordBtn.textContent="显示密码";el.adminLoginError.textContent="";el.adminModal.classList.add("show")}
-      const closeAdmin=()=>el.adminModal.classList.remove("show");
-      function bind(){
-        el.topTitle.onclick=titleTap;
-        el.statusConfigBtn.onclick=openCfg;
-        el.connectToggleBtn.onclick=async()=>{if(app.isConnected){await disconn("连接已断开，透传已关闭",true);return}if(!app.ports.length)await reqPort();const ok=await conn(null,"连接成功，透传已开启");if(!ok&&app.supported&&!app.ports.length)toast("未接入设备，无法连接")};
-        el.syncRtcBtn.onclick=()=>syncRtc();
-        el.exitDevBtn.onclick=()=>devMode(false);
-        el.hexSendEnabled.onchange=()=>{app.hexSend=el.hexSendEnabled.checked;el.sendInput.placeholder=app.hexSend?"发送区（HEX）":"发送区（文本）"};
-        el.hexDisplayEnabled.onchange=()=>{app.hexShow=el.hexDisplayEnabled.checked;renderLogs()};
-        el.timedSendEnabled.onchange=()=>{app.timed=el.timedSendEnabled.checked;el.timedIntervalText.disabled=!app.timed;restartTimed()};
-        el.timedIntervalText.oninput=()=>{el.timedIntervalText.value=el.timedIntervalText.value.replace(/\D+/g,"").slice(0,5);app.timedText=el.timedIntervalText.value||"1000";if(app.timed)restartTimed()};
-        document.querySelectorAll('input[name="lineEnding"]').forEach((r)=>r.onchange=()=>{app.lineMode=curLine()});
-        el.sendInput.oninput=()=>{app.sendInput=el.sendInput.value};
-        el.sendInput.onkeydown=(e)=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();sendNow(true)}};
-        el.openCmdBtn.onclick=openCmd;
-        el.clearDevBtn.onclick=()=>{app.logs=[];app.tx=0;app.rx=0;renderCounter();renderLogs();toast("已清空透传数据")};
-        el.sendDevBtn.onclick=()=>sendNow(true);
-        el.cancelSerialConfigBtn.onclick=closeCfg;
-        el.useCustomBaud.onchange=()=>{app.useCustom=el.useCustomBaud.checked};
-        el.customBaudInput.onfocus=()=>{app.useCustom=true;el.useCustomBaud.checked=true};
-        el.saveSerialConfigBtn.onclick=saveCfg;
-        el.serialConfigModal.onclick=(e)=>{if(e.target===el.serialConfigModal)closeCfg()};
-        el.closeCommandModalBtn.onclick=closeCmd;
-        el.commandModal.onclick=(e)=>{if(e.target===el.commandModal)closeCmd()};
-        el.adminLoginBtn.onclick=openAdmin;
-        el.cmdGetAckBtn.onclick=()=>sendCmd("USB_CMD_GET_ACK",0x00);
-        el.cmdGetInfoBtn.onclick=()=>sendCmd("USB_CMD_GET_INFO",0x01);
-        el.sendGetDataBtn.onclick=()=>sendCmd("USB_CMD_GET_DATA",0x02,new Uint8Array([app.getDataType&255]));
-        el.sendGetRtcBtn.onclick=()=>sendCmd("USB_CMD_GET_RTC",0x03,new Uint8Array([app.getRtcFmt&255]));
-        el.sendSetRtcBtn.onclick=()=>sendCmd("USB_CMD_SET_RTC",0x04,setRtcPayload());
-        el.sendGetPortBtn.onclick=()=>sendCmd("USB_CMD_GET_PROT_DATA",0x05,new Uint8Array([app.protType&255]));
-        el.sendGetTestBtn.onclick=()=>sendGetTest(app.testSel,true);
-        el.sendSetTestBtn.onclick=()=>{const s=getSelTest();if(s.id===0x00){sendSetTest(s.id,app.ltVal,true);return}const v=Number.parseInt(el.setTestValueInput.value,10);if(!Number.isFinite(v)||v<s.min||v>s.max){toast(`参数超出范围：${s.min}-${s.max}${s.unit}`);return}app.testVal=String(v);sendSetTest(s.id,v,true)};
-        el.setTestValueInput.oninput=()=>{el.setTestValueInput.value=el.setTestValueInput.value.replace(/\D+/g,"").slice(0,5);app.testVal=el.setTestValueInput.value};
-        el.cancelAdminBtn.onclick=closeAdmin;
-        el.toggleAdminPasswordBtn.onclick=()=>{app.pwdShow=!app.pwdShow;el.adminPasswordInput.type=app.pwdShow?"text":"password";el.toggleAdminPasswordBtn.textContent=app.pwdShow?"隐藏密码":"显示密码"};
-        el.confirmAdminBtn.onclick=()=>{app.pwdInput=el.adminPasswordInput.value;if(app.pwdInput===ADMIN_PWD){app.admin=true;app.pwdErr="";closeAdmin();renderTestUi();toast("管理员权限已开启")}else{app.pwdErr="密码错误，请注意大小写";el.adminLoginError.textContent=app.pwdErr}};
-        el.adminModal.onclick=(e)=>{if(e.target===el.adminModal)closeAdmin()};
-        if(app.supported){navigator.serial.addEventListener("connect",async()=>{await refreshPorts()});navigator.serial.addEventListener("disconnect",async()=>{await refreshPorts()})}
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Power Bank 数据监测</title>
+    <style>
+      :root {
+        --bg1: #0b1530;
+        --bg2: #122949;
+        --bg3: #0a1c35;
+        --card: rgba(10, 28, 52, 0.84);
+        --sub: rgba(17, 42, 74, 0.85);
+        --line: rgba(142, 197, 255, 0.3);
+        --line2: rgba(142, 197, 255, 0.8);
+        --text: #edf5ff;
+        --muted: #bdd1eb;
+        --neon: #8ec5ff;
+        --ok: #62f7a2;
+        --danger: #ff6f86;
+        --r: 16px;
+        --shadow: 0 16px 34px rgba(0, 0, 0, 0.45);
       }
-      function periodic(){if(app.phoneTimer)clearInterval(app.phoneTimer);app.phoneTimer=setInterval(()=>{app.phoneMs=Date.now();renderTime()},1000);setInterval(()=>{refreshPorts()},600)}
-      async function initPorts(){await refreshPorts();if(app.ports.length&&!app.isConnected)await conn(null,"检测到已接入USB设备，已自动开启连接")}
-      function setup(){app.hexSend=false;app.hexShow=true;app.timed=false;app.lineMode=0;app.sendInput="";el.hexSendEnabled.checked=false;el.hexDisplayEnabled.checked=true;el.timedSendEnabled.checked=false;el.timedIntervalText.disabled=true;el.sendInput.value="";el.sendInput.placeholder="发送区（文本）";app.testVal=String(TEST_OPTS[0].def);renderTestUi()}
-      function renderBanner(){if(!secure()){el.secureBanner.textContent="注意：Web Serial API 需要 HTTPS 或 localhost。请将页面部署到 HTTPS 环境后使用。";el.secureBanner.classList.add("show")}else{el.secureBanner.classList.remove("show");el.secureBanner.textContent=""}}
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        font-family:
+          "Source Sans 3", "Noto Sans SC", "PingFang SC", "Microsoft YaHei",
+          sans-serif;
+        color: var(--text);
+        color-scheme: dark;
+      }
+      body {
+        overflow: hidden;
+        background:
+          radial-gradient(
+            80rem 40rem at -8% -25%,
+            rgba(142, 197, 255, 0.18) 0%,
+            transparent 60%
+          ),
+          radial-gradient(
+            70rem 45rem at 115% 10%,
+            rgba(105, 171, 255, 0.13) 0%,
+            transparent 62%
+          ),
+          linear-gradient(180deg, var(--bg1), var(--bg2) 48%, var(--bg3));
+      }
+      .grid {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background-image:
+          linear-gradient(rgba(142, 197, 255, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(142, 197, 255, 0.05) 1px, transparent 1px);
+        background-size: 36px 36px;
+        mask-image: radial-gradient(
+          circle at 50% 15%,
+          rgba(0, 0, 0, 0.85),
+          transparent 90%
+        );
+      }
+      .shell {
+        position: relative;
+        z-index: 1;
+        max-width: 1360px;
+        height: 100vh;
+        margin: 0 auto;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 14px;
+        border-radius: 24px;
+        border: 1px solid rgba(142, 197, 255, 0.45);
+        background: linear-gradient(
+          90deg,
+          rgba(142, 197, 255, 0.13),
+          rgba(216, 235, 255, 0.08)
+        );
+        box-shadow: var(--shadow);
+        cursor: pointer;
+      }
+      .top-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(
+          circle,
+          rgba(142, 197, 255, 0.33),
+          transparent 70%
+        );
+        color: var(--neon);
+      }
+      .title {
+        font-size: 18px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .chip {
+        padding: 5px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(189, 209, 235, 0.5);
+        background: rgba(122, 184, 255, 0.13);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+      }
+      .chip.ok {
+        color: var(--neon);
+        border-color: rgba(142, 197, 255, 0.8);
+      }
+      .banner {
+        display: none;
+        border: 1px solid rgba(255, 165, 95, 0.6);
+        background: rgba(255, 145, 90, 0.12);
+        color: #ffd8bc;
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      .banner.show {
+        display: block;
+      }
+      .conn {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+      .meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 12px;
+        color: var(--muted);
+        flex: 1;
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      .state-btn {
+        width: 108px;
+        height: 36px;
+        border-radius: 18px;
+        border: 1px solid rgba(189, 209, 235, 0.45);
+        background: rgba(122, 184, 255, 0.13);
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      .state-btn.on {
+        border-color: var(--line2);
+        color: var(--neon);
+      }
+      .state-btn.on .dot {
+        background: var(--neon);
+      }
+      .main-btn {
+        width: 94px;
+        height: 36px;
+        border-radius: 18px;
+        border: none;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        color: #102849;
+        background: var(--neon);
+      }
+      .main-btn.on {
+        background: #1f406f;
+        color: var(--neon);
+        border: 1px solid rgba(142, 197, 255, 0.45);
+      }
+      .view {
+        flex: 1;
+        min-height: 0;
+      }
+      .scroll {
+        height: 100%;
+        overflow: auto;
+        padding-right: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .card {
+        border-radius: 20px;
+        border: 1.8px solid rgba(142, 197, 255, 0.9);
+        background: var(--card);
+        box-shadow: var(--shadow);
+        padding: 16px;
+      }
+      .head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .line {
+        height: 1px;
+        background: var(--neon);
+        margin: 8px 0;
+        opacity: 0.85;
+      }
+      .sub {
+        border-radius: 10px;
+        border: 1px solid rgba(142, 197, 255, 0.22);
+        background: linear-gradient(180deg, var(--sub), rgba(17, 42, 74, 0.66));
+        padding: 10px 12px;
+      }
+      .time {
+        display: grid;
+        grid-template-columns: 1fr 80px 1fr;
+        gap: 8px;
+        align-items: center;
+      }
+      .tcol {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .t1 {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .t2 {
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .t3 {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .mini {
+        height: 24px;
+        border-radius: 8px;
+        border: 1px solid rgba(142, 197, 255, 0.7);
+        background: rgba(142, 197, 255, 0.14);
+        color: var(--neon);
+        font-size: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        width: 100%;
+      }
+      .st {
+        margin-top: 8px;
+        border-radius: 10px;
+        border: 1px solid rgba(142, 197, 255, 0.24);
+        background: linear-gradient(
+          90deg,
+          rgba(17, 42, 74, 0.76),
+          rgba(17, 42, 74, 0.56)
+        );
+        padding: 7px 8px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+      .si {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        color: rgba(216, 235, 255, 0.56);
+        font-size: 12px;
+      }
+      .bar {
+        width: 3px;
+        height: 12px;
+        background: rgba(216, 235, 255, 0.3);
+      }
+      .si.on {
+        color: #d8ebff;
+        font-weight: 700;
+      }
+      .si.on .bar {
+        background: #d8ebff;
+      }
+      .rings {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .rw {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 132px;
+      }
+      .ring {
+        --v: 0;
+        --c: #8ec5ff;
+        width: 112px;
+        height: 112px;
+        border-radius: 50%;
+        position: relative;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(
+            circle at center,
+            rgba(142, 197, 255, 0.2) 0 54%,
+            transparent 55%
+          ),
+          conic-gradient(
+            var(--c) calc(var(--v) * 1%),
+            rgba(142, 197, 255, 0.2) 0
+          );
+        box-shadow: 0 0 0 5px rgba(142, 197, 255, 0.08) inset;
+      }
+      .ring::before {
+        content: "";
+        position: absolute;
+        inset: 9px;
+        border-radius: 50%;
+        background: rgba(6, 22, 42, 0.88);
+        border: 1px solid rgba(142, 197, 255, 0.22);
+      }
+      .rc {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        text-align: center;
+      }
+      .rv {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--c);
+        line-height: 1;
+      }
+      .rl {
+        font-size: 10px;
+        color: var(--muted);
+        line-height: 1;
+      }
+      .rs {
+        font-size: 9px;
+        color: rgba(142, 197, 255, 0.7);
+        line-height: 1;
+      }
+      .g2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+      }
+      .kv:first-child {
+        margin-top: 0;
+      }
+      .k,
+      .v,
+      .u {
+        color: var(--neon);
+        font-size: 16px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .v {
+        text-align: center;
+      }
+      .u {
+        text-align: right;
+      }
+      .single .kv {
+        grid-template-columns: 1fr 2fr;
+      }
+      .single .u {
+        display: none;
+      }
+      .ports {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .pc {
+        border-radius: 10px;
+        border: 1px solid rgba(142, 197, 255, 0.36);
+        background: linear-gradient(180deg, var(--sub), rgba(17, 42, 74, 0.66));
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .ph {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+      .pt {
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .ps {
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .tiny {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .psub {
+        border-radius: 10px;
+        border: 1px solid rgba(142, 197, 255, 0.22);
+        background: linear-gradient(180deg, var(--sub), rgba(17, 42, 74, 0.66));
+        padding: 9px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .hs {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto;
+        align-items: center;
+        gap: 8px;
+        font-size: 15px;
+        color: var(--neon);
+        font-weight: 600;
+      }
+      .bolt {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        color: rgba(189, 209, 235, 0.72);
+        background: transparent;
+      }
+      .bolt.on {
+        color: var(--ok);
+        background: rgba(98, 247, 162, 0.35);
+      }
+      .empty {
+        height: 100px;
+        border-radius: 10px;
+        border: 1px solid rgba(142, 197, 255, 0.22);
+        background: linear-gradient(180deg, var(--sub), rgba(17, 42, 74, 0.66));
+      }
+      .dev {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        border-radius: 20px;
+        border: 1.8px solid rgba(142, 197, 255, 0.9);
+        background: var(--card);
+        padding: 14px;
+        box-shadow: var(--shadow);
+        min-height: 0;
+      }
+      .dt {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .dtl {
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .dtr {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .ready {
+        font-size: 12px;
+        color: #b9d8ff;
+        font-weight: 700;
+      }
+      .ready.ok {
+        color: var(--neon);
+      }
+      .ob {
+        height: 32px;
+        border-radius: 10px;
+        border: 1px solid rgba(142, 197, 255, 0.6);
+        background: transparent;
+        color: var(--neon);
+        font-size: 12px;
+        font-weight: 700;
+        padding: 0 10px;
+        cursor: pointer;
+      }
+      .box,
+      .sbox,
+      .lbox {
+        border-radius: 12px;
+        border: 1px solid rgba(142, 197, 255, 0.22);
+        background: linear-gradient(180deg, var(--sub), rgba(17, 42, 74, 0.66));
+      }
+      .box,
+      .sbox {
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .stitle {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .checks {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .check {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .check input {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--neon);
+        margin: 0;
+      }
+      .intv {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        gap: 8px;
+        align-items: center;
+      }
+      input,
+      select,
+      textarea,
+      button {
+        font-family: inherit;
+      }
+      .f {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid rgba(142, 197, 255, 0.45);
+        background: rgba(10, 29, 55, 0.84);
+        color: var(--text);
+        padding: 8px 10px;
+        outline: none;
+        font-size: 12px;
+      }
+      .f:focus {
+        border-color: var(--neon);
+        box-shadow: 0 0 0 3px rgba(142, 197, 255, 0.2);
+      }
+      .send {
+        min-height: 72px;
+        resize: vertical;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 12px;
+      }
+      .acts {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+      .gb {
+        height: 42px;
+        border-radius: 20px;
+        border: none;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .gb.c1 {
+        background: linear-gradient(90deg, #264c7d, #3f70aa);
+      }
+      .gb.c2 {
+        background: linear-gradient(90deg, #2e598c, #4d7db5);
+      }
+      .gb.c3 {
+        background: linear-gradient(90deg, #5b95ca, #8ec5ff);
+        color: #102849;
+      }
+      .cnt {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .lbox {
+        flex: 1;
+        min-height: 0;
+        padding: 10px;
+        overflow: auto;
+      }
+      .le {
+        height: 100%;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .li {
+        border-radius: 10px;
+        border: 1px solid rgba(182, 226, 255, 0.7);
+        background: linear-gradient(
+          90deg,
+          rgba(66, 113, 171, 0.45),
+          rgba(170, 213, 241, 0.3),
+          rgba(234, 246, 255, 0.25)
+        );
+        padding: 8px 10px;
+        margin-bottom: 6px;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 11px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .li.rx {
+        border-color: rgba(159, 211, 255, 0.72);
+        background: linear-gradient(
+          90deg,
+          rgba(75, 121, 176, 0.45),
+          rgba(141, 190, 232, 0.3),
+          rgba(223, 240, 255, 0.25)
+        );
+      }
+      .dim {
+        color: var(--muted);
+      }
+      .m {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        z-index: 12;
+      }
+      .m.show {
+        display: flex;
+      }
+      .d {
+        width: min(760px, 100%);
+        max-height: min(92vh, 760px);
+        border-radius: 18px;
+        border: 1px solid rgba(142, 197, 255, 0.58);
+        background: var(--card);
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .d.s {
+        width: min(520px, 100%);
+      }
+      .dh {
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(142, 197, 255, 0.2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+      .dtit {
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .db {
+        padding: 12px 14px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+      }
+      .df {
+        border-top: 1px solid rgba(142, 197, 255, 0.2);
+        padding: 10px 14px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .cg {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .cg.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .cg.four {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .c {
+        border-radius: 9px;
+        border: 1px solid rgba(189, 209, 235, 0.45);
+        background: transparent;
+        color: var(--text);
+        font-size: 11px;
+        padding: 6px 6px;
+        text-align: center;
+        cursor: pointer;
+        min-height: 30px;
+        display: grid;
+        place-items: center;
+      }
+      .c.on {
+        border-color: var(--neon);
+        color: var(--neon);
+        background: rgba(142, 197, 255, 0.18);
+        font-weight: 700;
+      }
+      .b {
+        border: none;
+        border-radius: 10px;
+        background: #2c5a92;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 700;
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+      .b.full {
+        width: 100%;
+      }
+      .b.ghost {
+        border: 1px solid rgba(142, 197, 255, 0.55);
+        background: transparent;
+        color: var(--neon);
+      }
+      .note {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.35;
+      }
+      .err {
+        color: var(--danger);
+        font-size: 11px;
+      }
+      .ok {
+        color: var(--neon);
+      }
+      .iw {
+        position: relative;
+      }
+      .eye {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 12px;
+        padding: 0;
+      }
+      .tw {
+        position: fixed;
+        left: 50%;
+        top: 20px;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 20;
+        pointer-events: none;
+        width: min(560px, calc(100% - 24px));
+      }
+      .t {
+        border-radius: 10px;
+        border: 1px solid rgba(142, 197, 255, 0.5);
+        background: rgba(7, 18, 36, 0.88);
+        padding: 8px 10px;
+        font-size: 12px;
+        box-shadow: var(--shadow);
+        animation: ti 0.18s ease;
+      }
+      @keyframes ti {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (max-width: 980px) {
+        body {
+          overflow: auto;
+        }
+        .shell {
+          height: auto;
+          min-height: 100vh;
+        }
+        .time {
+          grid-template-columns: 1fr;
+        }
+        .rings,
+        .g2 {
+          grid-template-columns: 1fr;
+        }
+        .conn {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .actions {
+          justify-content: flex-start;
+        }
+        .cg.four {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .checks,
+        .acts {
+          grid-template-columns: 1fr;
+        }
+        .intv {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 620px) {
+        .shell {
+          padding: 12px;
+        }
+        .cg,
+        .cg.two,
+        .cg.four {
+          grid-template-columns: 1fr;
+        }
+        .tiny {
+          grid-template-columns: 1fr;
+        }
+        .hs {
+          grid-template-columns: 1fr;
+        }
+        .dh {
+          flex-wrap: wrap;
+        }
+        .top {
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grid"></div>
+    <div class="shell">
+      <section id="topTitle" class="top" title="连续点击可进入开发者模式">
+        <div class="top-left">
+          <div class="icon">🔋</div>
+          <div class="title">充电宝数据监测</div>
+        </div>
+        <div id="usbPermissionChip" class="chip">权限未授权</div>
+      </section>
+      <div id="secureBanner" class="banner"></div>
+      <section class="conn">
+        <div class="meta">
+          <div id="portText">端口：未接入</div>
+          <div id="baudText">波特率：921600</div>
+        </div>
+        <div class="actions">
+          <button id="statusConfigBtn" class="state-btn" type="button">
+            <span class="dot"></span><span id="statusLabel">未连接</span>
+          </button>
+          <button id="connectToggleBtn" class="main-btn" type="button">
+            🔌 连接
+          </button>
+        </div>
+      </section>
 
-      async function init(){renderBanner();bind();periodic();setup();if(!app.supported)toast("当前浏览器不支持 Web Serial API，请使用新版 Chrome / Edge");render();await initPorts();render()}
-      init();
-    })();
-  </script>
-</body>
+      <main id="normalView" class="view scroll">
+        <article class="card">
+          <div class="sub time">
+            <div class="tcol">
+              <div class="t1">手机当前时间</div>
+              <div id="phoneDateText" class="t2">---</div>
+              <div id="phoneTimeText" class="t3">---</div>
+            </div>
+            <div>
+              <button id="syncRtcBtn" class="mini" type="button">
+                同步RTC
+              </button>
+            </div>
+            <div class="tcol">
+              <div class="t1">充电宝时间</div>
+              <div id="powerDateText" class="t2">---</div>
+              <div id="powerTimeText" class="t3">---</div>
+            </div>
+          </div>
+          <div class="st">
+            <div id="stateIdle" class="si on">
+              <span class="bar"></span><span>空闲</span>
+            </div>
+            <div id="stateCharging" class="si">
+              <span class="bar"></span><span>充电</span>
+            </div>
+            <div id="stateDischarging" class="si">
+              <span class="bar"></span><span>放电</span>
+            </div>
+          </div>
+          <div class="rings">
+            <div class="rw">
+              <div id="socRing" class="ring" style="--v: 0; --c: #8ec5ff">
+                <div class="rc">
+                  <div id="socValue" class="rv">0%</div>
+                  <div class="rl">电量</div>
+                  <div id="socStatusText" class="rs">待机中</div>
+                </div>
+              </div>
+            </div>
+            <div class="rw">
+              <div id="sohRing" class="ring" style="--v: 0; --c: #8ec5ff">
+                <div class="rc">
+                  <div id="sohValue" class="rv">0%</div>
+                  <div class="rl">健康度</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="head"><span>🔋</span><span>电池信息</span></div>
+          <div class="line"></div>
+          <div class="g2" style="margin-top: 6px">
+            <div class="sub">
+              <div class="kv">
+                <div class="k">电压：</div>
+                <div id="packVoltage" class="v">---</div>
+                <div class="u">V</div>
+              </div>
+              <div class="kv">
+                <div class="k">电流：</div>
+                <div id="packCurrent" class="v">---</div>
+                <div class="u">A</div>
+              </div>
+              <div class="kv">
+                <div class="k">温度：</div>
+                <div id="batteryTemperature" class="v">---</div>
+                <div class="u">°C</div>
+              </div>
+              <div class="kv">
+                <div class="k">循环：</div>
+                <div id="cycleCount" class="v">---</div>
+                <div class="u">次</div>
+              </div>
+            </div>
+            <div class="sub">
+              <div class="kv">
+                <div class="k">第一节：</div>
+                <div id="cellVoltage1" class="v">---</div>
+                <div class="u">V</div>
+              </div>
+              <div class="kv">
+                <div class="k">第二节：</div>
+                <div id="cellVoltage2" class="v">---</div>
+                <div class="u">V</div>
+              </div>
+              <div class="kv">
+                <div class="k">第三节：</div>
+                <div id="cellVoltage3" class="v">---</div>
+                <div class="u">V</div>
+              </div>
+              <div class="kv">
+                <div class="k">第四节：</div>
+                <div id="cellVoltage4" class="v">---</div>
+                <div class="u">V</div>
+              </div>
+            </div>
+          </div>
+          <div class="sub" style="margin-top: 8px">
+            <div class="kv">
+              <div class="k">预计充满：</div>
+              <div id="estimateChargeMinutes" class="v">---</div>
+              <div class="u">分钟</div>
+            </div>
+            <div class="kv">
+              <div class="k">预计放空：</div>
+              <div id="estimateDischargeMinutes" class="v">---</div>
+              <div class="u">分钟</div>
+            </div>
+          </div>
+          <div class="sub" style="margin-top: 8px">
+            <div class="kv">
+              <div class="k">当前容量：</div>
+              <div id="remainingCapacity" class="v">---</div>
+              <div class="u">mAH</div>
+            </div>
+            <div class="kv">
+              <div class="k">满电容量：</div>
+              <div id="fullChargeCapacity" class="v">---</div>
+              <div class="u">mAH</div>
+            </div>
+            <div class="kv">
+              <div class="k">设计容量：</div>
+              <div id="designCapacity" class="v">---</div>
+              <div class="u">mAH</div>
+            </div>
+          </div>
+          <div class="sub single" style="margin-top: 8px">
+            <div class="kv">
+              <div class="k">电池类型：</div>
+              <div id="batteryType" class="v">---</div>
+              <div class="u"></div>
+            </div>
+            <div class="kv">
+              <div class="k">电池厂商：</div>
+              <div id="batteryVendor" class="v">---</div>
+              <div class="u"></div>
+            </div>
+            <div class="kv">
+              <div class="k">生产日期：</div>
+              <div id="productionDate" class="v">---</div>
+              <div class="u"></div>
+            </div>
+            <div class="kv">
+              <div class="k">批次序列号：</div>
+              <div id="batchSerialNumber" class="v">---</div>
+              <div class="u"></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="head"><span>🔌</span><span>端口信息</span></div>
+          <div class="line"></div>
+          <div id="portInfoList" class="ports"></div>
+        </article>
+
+        <article class="card">
+          <div class="head">
+            <span style="color: #ff9fb0">⚠</span><span>异常信息</span>
+          </div>
+          <div class="line"></div>
+          <div class="empty"></div>
+        </article>
+      </main>
+
+      <section id="developerView" class="view dev" style="display: none">
+        <div class="dt">
+          <div class="dtl">开发者模式</div>
+          <div class="dtr">
+            <div id="passthroughReadyText" class="ready">透传未连接</div>
+            <button id="exitDevBtn" class="ob" type="button">
+              返回正常模式
+            </button>
+          </div>
+        </div>
+        <div class="box">
+          <div class="stitle">透传设置</div>
+          <div class="checks">
+            <label class="check"
+              ><input id="hexSendEnabled" type="checkbox" /><span
+                >HEX发送</span
+              ></label
+            >
+            <label class="check"
+              ><input id="hexDisplayEnabled" type="checkbox" checked /><span
+                >HEX显示</span
+              ></label
+            >
+          </div>
+          <div class="intv">
+            <label class="check"
+              ><input id="timedSendEnabled" type="checkbox" /><span
+                >定时发送</span
+              ></label
+            >
+            <input
+              id="timedIntervalText"
+              class="f"
+              type="text"
+              inputmode="numeric"
+              maxlength="5"
+              placeholder="发送间隔(ms)"
+              value="1000"
+              disabled
+            />
+          </div>
+          <div class="stitle">发送附加换行</div>
+          <div class="checks" style="grid-template-columns: repeat(3, 1fr)">
+            <label class="check"
+              ><input name="lineEnding" type="radio" value="0" checked /><span
+                >无</span
+              ></label
+            >
+            <label class="check"
+              ><input name="lineEnding" type="radio" value="1" /><span
+                >\n</span
+              ></label
+            >
+            <label class="check"
+              ><input name="lineEnding" type="radio" value="2" /><span
+                >\r\n</span
+              ></label
+            >
+          </div>
+        </div>
+        <div class="sbox">
+          <textarea
+            id="sendInput"
+            class="f send"
+            placeholder="发送区（文本）"
+          ></textarea>
+          <div class="acts">
+            <button id="openCmdBtn" class="gb c1" type="button">命令</button>
+            <button id="clearDevBtn" class="gb c2" type="button">清空</button>
+            <button id="sendDevBtn" class="gb c3" type="button">发送</button>
+          </div>
+          <div id="byteCounter" class="cnt">发送字节：0 接收字节：0</div>
+        </div>
+        <div id="devLogBox" class="lbox">
+          <div class="le">暂无透传数据</div>
+        </div>
+      </section>
+    </div>
+
+    <div id="serialConfigModal" class="m">
+      <div class="d s">
+        <div class="dh"><div class="dtit">虚拟串口设置</div></div>
+        <div class="db">
+          <div
+            id="authorizedPortText"
+            class="stitle"
+            style="font-size: 13px; color: var(--text)"
+          >
+            已授权端口：VID：---- PID：----
+          </div>
+          <button id="requestPortBtn" class="b ghost full" type="button">
+            获取授权
+          </button>
+          <div
+            class="stitle"
+            style="font-size: 13px; color: var(--text); margin-top: 4px"
+          >
+            波特率
+          </div>
+          <div id="baudSelectGrid" class="cg four"></div>
+          <label class="check" style="padding-top: 2px"
+            ><input
+              id="useCustomBaud"
+              type="radio"
+              name="baudMode"
+              value="custom"
+            /><span>自定义波特率</span></label
+          >
+          <input
+            id="customBaudInput"
+            class="f"
+            type="text"
+            inputmode="numeric"
+            maxlength="7"
+            placeholder="例如 256000"
+          />
+          <div id="serialConfigError" class="err"></div>
+        </div>
+        <div class="df">
+          <button id="cancelSerialConfigBtn" class="b ghost" type="button">
+            取消</button
+          ><button id="saveSerialConfigBtn" class="b" type="button">
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="commandModal" class="m">
+      <div class="d">
+        <div class="dh">
+          <div class="dtit">USB命令</div>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <div id="adminStateText" class="note ok" style="display: none">
+              管理员已授权
+            </div>
+            <button
+              id="adminLoginBtn"
+              class="b ghost"
+              type="button"
+              style="padding: 6px 8px; font-size: 11px"
+            >
+              管理员登录
+            </button>
+          </div>
+        </div>
+        <div class="db">
+          <div class="note">数据流协议命令（帧头AA BB，CRC8-CCITT）</div>
+          <div class="cg two">
+            <button id="cmdGetAckBtn" class="b" type="button">GET_ACK</button
+            ><button id="cmdGetInfoBtn" class="b" type="button">
+              GET_INFO
+            </button>
+          </div>
+          <div class="stitle" style="font-size: 12px; color: var(--text)">
+            USB_CMD_GET_DATA
+          </div>
+          <div id="getDataTypeGrid" class="cg"></div>
+          <button id="sendGetDataBtn" class="b full" type="button">
+            发送 GET_DATA
+          </button>
+          <div class="stitle" style="font-size: 12px; color: var(--text)">
+            USB_CMD_GET_RTC / SET_RTC
+          </div>
+          <div id="rtcFormatGrid" class="cg two"></div>
+          <div class="cg two">
+            <button id="sendGetRtcBtn" class="b" type="button">
+              发送 GET_RTC</button
+            ><button id="sendSetRtcBtn" class="b" type="button">
+              发送 SET_RTC
+            </button>
+          </div>
+          <div id="setRtcNote" class="note">
+            SET_RTC将直接发送北京时间（正常时间格式）
+          </div>
+          <div class="stitle" style="font-size: 12px; color: var(--text)">
+            USB_CMD_GET_PROT_DATA
+          </div>
+          <div id="protPortTypeGrid" class="cg four"></div>
+          <button id="sendGetPortBtn" class="b full" type="button">
+            发送 GET_PORT
+          </button>
+          <div class="line" style="margin: 6px 0; opacity: 0.32"></div>
+          <div class="stitle" style="font-size: 12px; color: var(--text)">
+            USB_CMD_GET_TEST / SET_TEST（管理员）
+          </div>
+          <div id="adminTestBlocked" class="note">
+            请先登录管理员后再使用 GET_TEST / SET_TEST
+          </div>
+          <div id="adminTestSection" style="display: none">
+            <div class="note">参数选择（不同参数输入范围不同）</div>
+            <div id="testParamGrid" class="cg two"></div>
+            <div id="testParamRange" class="note"></div>
+            <div id="testDeviceValue" class="note"></div>
+            <div id="testResponseTip" class="note ok">未读取测试数据</div>
+            <div id="testQuickGrid" class="cg"></div>
+            <input
+              id="setTestValueInput"
+              class="f"
+              type="text"
+              inputmode="numeric"
+              maxlength="5"
+              placeholder="SET_TEST数值"
+            />
+            <div class="cg two">
+              <button id="sendGetTestBtn" class="b" type="button">
+                获取测试数据</button
+              ><button id="sendSetTestBtn" class="b" type="button">
+                发送测试数据
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="df">
+          <button id="closeCommandModalBtn" class="b ghost" type="button">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="adminModal" class="m">
+      <div class="d s">
+        <div class="dh"><div class="dtit">管理员登录</div></div>
+        <div class="db">
+          <div class="note">管理员名称</div>
+          <input class="f" type="text" value="Psthk" readonly />
+          <div class="note">密码（区分大小写）</div>
+          <div class="iw">
+            <input
+              id="adminPasswordInput"
+              class="f"
+              type="password"
+              placeholder="密码（区分大小写）"
+            /><button id="toggleAdminPasswordBtn" class="eye" type="button">
+              显示密码
+            </button>
+          </div>
+          <div id="adminLoginError" class="err"></div>
+        </div>
+        <div class="df">
+          <button id="cancelAdminBtn" class="b ghost" type="button">取消</button
+          ><button id="confirmAdminBtn" class="b" type="button">登录</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toastWrap" class="tw"></div>
+
+    <script>
+      (() => {
+        const CMD_ACK = 0x00,
+          CMD_DATA = 0x02,
+          CMD_RTC = 0x03,
+          CMD_SET_RTC = 0x04,
+          CMD_PORT = 0x05,
+          CMD_GET_TEST = 0x06,
+          CMD_SET_TEST = 0x07;
+        const DT_TEMP = 0,
+          DT_VOLT = 1,
+          DT_C1 = 2,
+          DT_C2 = 3,
+          DT_CUR = 4,
+          DT_RC = 5,
+          DT_FC = 6,
+          DT_DC = 7,
+          DT_TTE = 8,
+          DT_TTF = 9,
+          DT_CYCLE = 10,
+          DT_SOC = 11,
+          DT_SOH = 12,
+          DT_COUNT = 13,
+          DT_TYPE = 14,
+          DT_VENDOR = 15,
+          DT_DATE = 16,
+          DT_STATUS = 17,
+          DT_MAX = DT_STATUS;
+        const STATIC_TYPES = [DT_DC, DT_TYPE, DT_VENDOR, DT_DATE],
+          DYNAMIC_TYPES = [
+            DT_TEMP,
+            DT_VOLT,
+            DT_C1,
+            DT_C2,
+            DT_CUR,
+            DT_RC,
+            DT_FC,
+            DT_TTE,
+            DT_TTF,
+            DT_CYCLE,
+            DT_SOC,
+            DT_SOH,
+            DT_COUNT,
+            DT_STATUS,
+          ];
+        const PORT_COUNT = 4,
+          MIN_CMD_MS = 5,
+          BEIJING_OFFSET = 8 * 60 * 60 * 1000,
+          DEV_TAP_MS = 800,
+          ADMIN_NAME = "Psthk",
+          ADMIN_PWD = "Lyh21180201";
+        const GET_DATA_OPTS = [
+          [0, "电池温度"],
+          [1, "电池总电压"],
+          [2, "第一节电压"],
+          [3, "第二节电压"],
+          [4, "电池电流"],
+          [5, "剩余容量"],
+          [6, "满充容量"],
+          [7, "设计容量"],
+          [8, "预计放空时间"],
+          [9, "预计充满时间"],
+          [10, "循环次数"],
+          [11, "SOC电量"],
+          [12, "SOH健康度"],
+          [13, "电池串数"],
+          [14, "电池类型"],
+          [15, "电池厂商"],
+          [16, "电池出厂日期"],
+          [17, "充放电状态"],
+        ];
+        const RTC_OPTS = [
+            [0, "正常时间"],
+            [1, "Unix时间戳"],
+          ],
+          PORT_OPTS = [
+            [0, "端口0"],
+            [1, "端口1"],
+            [2, "端口2"],
+            [3, "端口3"],
+          ];
+        const TEST_OPTS = [
+          {
+            id: 0,
+            label: "LT_Tset老化使能",
+            min: 0,
+            max: 1,
+            def: 0,
+            unit: "",
+            quick: [
+              { v: 0, l: "关闭" },
+              { v: 1, l: "开启" },
+            ],
+          },
+          {
+            id: 1,
+            label: "CycleCount循环次数",
+            min: 0,
+            max: 65535,
+            def: 0,
+            unit: "",
+            quick: [
+              { v: 70, l: "70" },
+              { v: 140, l: "140" },
+              { v: 210, l: "210" },
+            ],
+          },
+        ];
+
+        const app = {
+          supported: "serial" in navigator,
+          ports: [],
+          selPort: null,
+          baud: 921600,
+          useCustom: false,
+          common: [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600],
+          activePort: null,
+          writer: null,
+          reader: null,
+          readActive: false,
+          writeQ: Promise.resolve(),
+          isConnected: false,
+          pendingData: [],
+          pendingPort: [],
+          pendingStatic: new Set(STATIC_TYPES),
+          bufData: [],
+          bufTest: [],
+          soc: 0,
+          soh: 0,
+          status: 0,
+          bat: null,
+          portsInfo: null,
+          dev: false,
+          tapCount: 0,
+          lastTap: 0,
+          hexSend: false,
+          hexShow: true,
+          timed: false,
+          timedText: "1000",
+          lineMode: 0,
+          sendInput: "",
+          tx: 0,
+          rx: 0,
+          logs: [],
+          getDataType: 0,
+          getRtcFmt: 0,
+          setRtcFmt: 0,
+          protType: 0,
+          admin: false,
+          pwdShow: false,
+          pwdInput: "",
+          pwdErr: "",
+          testSel: TEST_OPTS[0].id,
+          testVal: String(TEST_OPTS[0].def),
+          ltVal: 0,
+          testMap: new Map(),
+          lastTestReq: TEST_OPTS[0].id,
+          testTip: "未读取测试数据",
+          lastCmdNano: 0,
+          phoneMs: Date.now(),
+          pbMs: new Date(2026, 2, 31, 0, 0, 0, 0).getTime(),
+          pbDefault: new Date(2026, 2, 31, 0, 0, 0, 0).getTime(),
+          phoneTimer: null,
+          dataToken: 0,
+          portToken: 0,
+          timedTimer: null,
+          rtcSyncWaiting: false,
+          rtcSyncWaitTimer: null,
+        };
+        app.bat = defBat();
+        app.portsInfo = defPorts();
+
+        const el = {
+          topTitle: gid("topTitle"),
+          usbPermissionChip: gid("usbPermissionChip"),
+          secureBanner: gid("secureBanner"),
+          portText: gid("portText"),
+          baudText: gid("baudText"),
+          statusConfigBtn: gid("statusConfigBtn"),
+          statusLabel: gid("statusLabel"),
+          connectToggleBtn: gid("connectToggleBtn"),
+          normalView: gid("normalView"),
+          developerView: gid("developerView"),
+          syncRtcBtn: gid("syncRtcBtn"),
+          phoneDateText: gid("phoneDateText"),
+          phoneTimeText: gid("phoneTimeText"),
+          powerDateText: gid("powerDateText"),
+          powerTimeText: gid("powerTimeText"),
+          stateIdle: gid("stateIdle"),
+          stateCharging: gid("stateCharging"),
+          stateDischarging: gid("stateDischarging"),
+          socRing: gid("socRing"),
+          sohRing: gid("sohRing"),
+          socValue: gid("socValue"),
+          sohValue: gid("sohValue"),
+          socStatusText: gid("socStatusText"),
+          packVoltage: gid("packVoltage"),
+          packCurrent: gid("packCurrent"),
+          batteryTemperature: gid("batteryTemperature"),
+          cycleCount: gid("cycleCount"),
+          cellVoltage1: gid("cellVoltage1"),
+          cellVoltage2: gid("cellVoltage2"),
+          cellVoltage3: gid("cellVoltage3"),
+          cellVoltage4: gid("cellVoltage4"),
+          estimateChargeMinutes: gid("estimateChargeMinutes"),
+          estimateDischargeMinutes: gid("estimateDischargeMinutes"),
+          remainingCapacity: gid("remainingCapacity"),
+          fullChargeCapacity: gid("fullChargeCapacity"),
+          designCapacity: gid("designCapacity"),
+          batteryType: gid("batteryType"),
+          batteryVendor: gid("batteryVendor"),
+          productionDate: gid("productionDate"),
+          batchSerialNumber: gid("batchSerialNumber"),
+          portInfoList: gid("portInfoList"),
+          passthroughReadyText: gid("passthroughReadyText"),
+          exitDevBtn: gid("exitDevBtn"),
+          hexSendEnabled: gid("hexSendEnabled"),
+          hexDisplayEnabled: gid("hexDisplayEnabled"),
+          timedSendEnabled: gid("timedSendEnabled"),
+          timedIntervalText: gid("timedIntervalText"),
+          sendInput: gid("sendInput"),
+          openCmdBtn: gid("openCmdBtn"),
+          clearDevBtn: gid("clearDevBtn"),
+          sendDevBtn: gid("sendDevBtn"),
+          byteCounter: gid("byteCounter"),
+          devLogBox: gid("devLogBox"),
+          serialConfigModal: gid("serialConfigModal"),
+          authorizedPortText: gid("authorizedPortText"),
+          requestPortBtn: gid("requestPortBtn"),
+          baudSelectGrid: gid("baudSelectGrid"),
+          useCustomBaud: gid("useCustomBaud"),
+          customBaudInput: gid("customBaudInput"),
+          serialConfigError: gid("serialConfigError"),
+          cancelSerialConfigBtn: gid("cancelSerialConfigBtn"),
+          saveSerialConfigBtn: gid("saveSerialConfigBtn"),
+          commandModal: gid("commandModal"),
+          adminStateText: gid("adminStateText"),
+          adminLoginBtn: gid("adminLoginBtn"),
+          cmdGetAckBtn: gid("cmdGetAckBtn"),
+          cmdGetInfoBtn: gid("cmdGetInfoBtn"),
+          getDataTypeGrid: gid("getDataTypeGrid"),
+          sendGetDataBtn: gid("sendGetDataBtn"),
+          rtcFormatGrid: gid("rtcFormatGrid"),
+          sendGetRtcBtn: gid("sendGetRtcBtn"),
+          sendSetRtcBtn: gid("sendSetRtcBtn"),
+          setRtcNote: gid("setRtcNote"),
+          protPortTypeGrid: gid("protPortTypeGrid"),
+          sendGetPortBtn: gid("sendGetPortBtn"),
+          adminTestBlocked: gid("adminTestBlocked"),
+          adminTestSection: gid("adminTestSection"),
+          testParamGrid: gid("testParamGrid"),
+          testParamRange: gid("testParamRange"),
+          testDeviceValue: gid("testDeviceValue"),
+          testResponseTip: gid("testResponseTip"),
+          testQuickGrid: gid("testQuickGrid"),
+          setTestValueInput: gid("setTestValueInput"),
+          sendGetTestBtn: gid("sendGetTestBtn"),
+          sendSetTestBtn: gid("sendSetTestBtn"),
+          closeCommandModalBtn: gid("closeCommandModalBtn"),
+          adminModal: gid("adminModal"),
+          adminPasswordInput: gid("adminPasswordInput"),
+          toggleAdminPasswordBtn: gid("toggleAdminPasswordBtn"),
+          adminLoginError: gid("adminLoginError"),
+          cancelAdminBtn: gid("cancelAdminBtn"),
+          confirmAdminBtn: gid("confirmAdminBtn"),
+          toastWrap: gid("toastWrap"),
+        };
+
+        function gid(id) {
+          return document.getElementById(id);
+        }
+        function defBat() {
+          return {
+            packVoltage: "---",
+            packCurrent: "---",
+            batteryTemperature: "---",
+            cycleCount: "---",
+            cellVoltage1: "---",
+            cellVoltage2: "---",
+            cellVoltage3: "---",
+            cellVoltage4: "---",
+            estimateChargeMinutes: "---",
+            estimateDischargeMinutes: "---",
+            remainingCapacity: "---",
+            fullChargeCapacity: "---",
+            designCapacity: "---",
+            batteryType: "---",
+            batteryVendor: "---",
+            productionDate: "---",
+            batchSerialNumber: "---",
+          };
+        }
+        function defPorts() {
+          const m = new Map();
+          for (let i = 0; i < PORT_COUNT; i++)
+            m.set(i, {
+              portId: i,
+              enableKnown: false,
+              portEnabled: false,
+              hasData: false,
+              lastErrorCode: null,
+              realtimeOutputState: 0,
+              stableOutputState: 0,
+              typecMosEnabled: false,
+              feedbackPortId: i,
+              pdHandshakeOk: false,
+              pdProtocolType: 0,
+              pdDataRole: 0,
+              negotiatedVoltageMv: 0,
+              negotiatedCurrentMa: 0,
+              backBoostVoltageMv: 0,
+              mosVoltageMv: 0,
+              mosVoltageRefreshed: false,
+              portCurrentMa: 0,
+              portCurrentRefreshed: false,
+              dpdmProtocolCode: 0,
+              protectionFlags: 0,
+            });
+          return m;
+        }
+        const d2 = (n) => String(n).padStart(2, "0");
+        const fDate = (ms) => {
+          const d = new Date(ms);
+          return `${d.getFullYear()}-${d2(d.getMonth() + 1)}-${d2(d.getDate())}`;
+        };
+        const fTime = (ms) => {
+          const d = new Date(ms);
+          return `${d2(d.getHours())}:${d2(d.getMinutes())}:${d2(d.getSeconds())}`;
+        };
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        const secure = () =>
+          window.isSecureContext ||
+          location.hostname === "localhost" ||
+          location.hostname === "127.0.0.1";
+        function toast(msg, dur = 2200) {
+          if (!msg) return;
+          const e = document.createElement("div");
+          e.className = "t";
+          e.textContent = msg;
+          el.toastWrap.appendChild(e);
+          setTimeout(() => e.remove(), Math.max(1800, dur));
+        }
+        function esc(s) {
+          return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+        }
+        const hexPad = (n, w) =>
+          Number(n).toString(16).toUpperCase().padStart(w, "0");
+        function portInfoOf(port) {
+          if (!port) return {};
+          try {
+            return typeof port.getInfo === "function" ? port.getInfo() : {};
+          } catch (_) {
+            return {};
+          }
+        }
+        const portTextGap = "\u00A0\u00A0\u00A0\u00A0";
+        function portVidPid(info) {
+          const vid = Number.isInteger(info.usbVendorId)
+              ? hexPad(info.usbVendorId, 4)
+              : "----",
+            pid = Number.isInteger(info.usbProductId)
+              ? hexPad(info.usbProductId, 4)
+              : "----";
+          return `VID：${vid}${portTextGap}PID：${pid}`;
+        }
+        function portLabel(idx) {
+          if (idx == null || idx < 0 || idx >= app.ports.length)
+            return portVidPid({});
+          const p = app.ports[idx],
+            info = portInfoOf(p);
+          return portVidPid(info);
+        }
+        function selectedName() {
+          return portLabel(app.selPort);
+        }
+        function clearRtcSyncWait() {
+          if (app.rtcSyncWaitTimer) {
+            clearTimeout(app.rtcSyncWaitTimer);
+            app.rtcSyncWaitTimer = null;
+          }
+          app.rtcSyncWaiting = false;
+        }
+        function canForget(port) {
+          return !!port && typeof port.forget === "function";
+        }
+        async function clearAuthExcept(keepPort = null) {
+          if (!app.supported) return false;
+          const toForget = app.ports.filter((p) => p && p !== keepPort);
+          if (!toForget.length) return false;
+          if (app.activePort && toForget.includes(app.activePort))
+            await disconn("切换端口，已断开旧连接", false);
+          let forgot = false,
+            forgetCapable = false;
+          for (const p of toForget) {
+            if (!canForget(p)) continue;
+            forgetCapable = true;
+            try {
+              await p.forget();
+              forgot = true;
+            } catch (_) {}
+          }
+          if (!forgetCapable && toForget.length)
+            toast("当前浏览器不支持自动清除串口授权，请手动清理授权");
+          if (forgot) await refreshPorts();
+          return forgot;
+        }
+        function hasPerm() {
+          return app.ports.length > 0;
+        }
+        function updPerm() {
+          el.usbPermissionChip.textContent = hasPerm()
+            ? "权限已授权"
+            : "权限未授权";
+          el.usbPermissionChip.classList.toggle("ok", hasPerm());
+        }
+        function updConnUI() {
+          el.portText.textContent = `端口：${selectedName()}`;
+          el.baudText.textContent = `波特率：${app.baud}`;
+          el.statusLabel.textContent = app.isConnected ? "已连接" : "未连接";
+          el.statusConfigBtn.classList.toggle("on", app.isConnected);
+          el.connectToggleBtn.classList.toggle("on", app.isConnected);
+          el.connectToggleBtn.textContent = app.isConnected
+            ? "🔌 断开"
+            : "🔌 连接";
+          const ready = app.isConnected && !!app.writer;
+          el.passthroughReadyText.textContent = ready
+            ? "透传已连接"
+            : "透传未连接";
+          el.passthroughReadyText.classList.toggle("ok", ready);
+          updPerm();
+        }
+        function lvlColor(v) {
+          v = Math.max(0, Math.min(100, Number(v) || 0));
+          const c = [
+              { r: 232, g: 74, b: 95 },
+              { r: 255, g: 138, b: 72 },
+              { r: 232, g: 103, b: 160 },
+              { r: 90, g: 149, b: 255 },
+              { r: 142, g: 197, b: 255 },
+            ],
+            mix = (a, b, t) =>
+              `rgb(${Math.round(a.r + (b.r - a.r) * t)},${Math.round(a.g + (b.g - a.g) * t)},${Math.round(a.b + (b.b - a.b) * t)})`;
+          if (v <= 20) return mix(c[0], c[1], v / 20);
+          if (v <= 45) return mix(c[1], c[2], (v - 20) / 25);
+          if (v <= 70) return mix(c[2], c[3], (v - 45) / 25);
+          return mix(c[3], c[4], (v - 70) / 30);
+        }
+        function renderRings() {
+          const soc = Math.max(0, Math.min(100, app.soc)),
+            soh = Math.max(0, Math.min(100, app.soh)),
+            sc = lvlColor(soc),
+            hc = lvlColor(soh);
+          el.socRing.style.setProperty("--v", String(soc));
+          el.socRing.style.setProperty("--c", sc);
+          el.sohRing.style.setProperty("--v", String(soh));
+          el.sohRing.style.setProperty("--c", hc);
+          el.socValue.textContent = `${soc}%`;
+          el.sohValue.textContent = `${soh}%`;
+          el.stateIdle.classList.toggle("on", app.status === 0);
+          el.stateCharging.classList.toggle("on", app.status === 1);
+          el.stateDischarging.classList.toggle("on", app.status === 2);
+          el.socStatusText.textContent =
+            app.status === 1
+              ? soc >= 100
+                ? "已充满"
+                : "充电中..."
+              : app.status === 2
+                ? "放电中"
+                : "待机中";
+        }
+        function renderTime() {
+          el.phoneDateText.textContent = fDate(app.phoneMs);
+          el.phoneTimeText.textContent = fTime(app.phoneMs);
+          el.powerDateText.textContent = fDate(app.pbMs);
+          el.powerTimeText.textContent = fTime(app.pbMs);
+        }
+        function renderBat() {
+          const d = app.bat;
+          el.packVoltage.textContent = d.packVoltage;
+          el.packCurrent.textContent = d.packCurrent;
+          el.batteryTemperature.textContent = d.batteryTemperature;
+          el.cycleCount.textContent = d.cycleCount;
+          el.cellVoltage1.textContent = d.cellVoltage1;
+          el.cellVoltage2.textContent = d.cellVoltage2;
+          el.cellVoltage3.textContent = d.cellVoltage3;
+          el.cellVoltage4.textContent = d.cellVoltage4;
+          el.estimateChargeMinutes.textContent = d.estimateChargeMinutes;
+          el.estimateDischargeMinutes.textContent = d.estimateDischargeMinutes;
+          el.remainingCapacity.textContent = d.remainingCapacity;
+          el.fullChargeCapacity.textContent = d.fullChargeCapacity;
+          el.designCapacity.textContent = d.designCapacity;
+          el.batteryType.textContent = d.batteryType;
+          el.batteryVendor.textContent = d.batteryVendor;
+          el.productionDate.textContent = d.productionDate;
+          el.batchSerialNumber.textContent = d.batchSerialNumber;
+        }
+        const protErr = (e) =>
+          e == null
+            ? "正常"
+            : e === 0x00
+              ? "参数输入错误"
+              : e === 0x01
+                ? "端口未使能"
+                : `错误0x${e.toString(16).toUpperCase().padStart(2, "0")}`;
+        const outState = (s) =>
+          s === 1 ? "SOURCE" : s === 2 ? "SINK" : "NONE";
+        const pdProto = (t) =>
+          t === 1
+            ? "SPR_PPS"
+            : t === 2
+              ? "EPR_AVS"
+              : t === 3
+                ? "SPR_AVS"
+                : "FIXED";
+        const pdRole = (r) => (r === 1 ? "DFP" : "UFP");
+        function dpdm(c) {
+          const m = {
+            1: "APPLE",
+            2: "SDP",
+            3: "CDP",
+            4: "DCP",
+            5: "HVDCP",
+            6: "HVDCP1MS",
+            7: "QC2_5V",
+            8: "QC2_9V",
+            9: "QC2_12V",
+            10: "QC2_20V",
+            11: "QC3",
+            12: "AFC",
+            13: "FCP",
+            14: "SCP",
+            15: "VOOC",
+            16: "UART",
+            17: "UFCS",
+            18: "VFCP",
+            19: "TFCP_B",
+            20: "TFCP_DE",
+          };
+          return m[c] || "NONE";
+        }
+        function renderPorts() {
+          const arr = [];
+          for (let i = 0; i < PORT_COUNT; i++) arr.push(app.portsInfo.get(i));
+          el.portInfoList.innerHTML = "";
+          arr.forEach((p, i) => {
+            const disabled = p.enableKnown && !p.portEnabled,
+              base = disabled || !p.hasData,
+              raw = outState(p.stableOutputState),
+              none = !base && raw === "NONE",
+              ph = base || none,
+              txt = (v) => (ph ? "---" : v),
+              num = (v) => (ph ? "---" : String(v)),
+              canPower = !ph && p.mosVoltageRefreshed && p.portCurrentRefreshed,
+              pwr = canPower
+                ? String(
+                    Math.floor(
+                      (Number(p.mosVoltageMv) * Number(p.portCurrentMa)) / 1000,
+                    ),
+                  )
+                : "---",
+              pdRaw = pdProto(p.pdProtocolType),
+              dpRaw = dpdm(p.dpdmProtocolCode),
+              hRaw = p.pdHandshakeOk ? pdRaw : dpRaw,
+              hTxt = txt(hRaw),
+              role = txt(pdRole(p.pdDataRole)),
+              stable = txt(raw),
+              direct =
+                pdRaw === "SPR_PPS" ||
+                pdRaw === "EPR_AVS" ||
+                pdRaw === "SPR_AVS",
+              fix = pdRaw === "FIXED" && p.negotiatedVoltageMv > 7000,
+              noPd = !p.pdHandshakeOk && p.negotiatedVoltageMv > 7000,
+              hi = ph ? false : p.pdHandshakeOk ? direct || fix : noPd,
+              sc =
+                p.lastErrorCode != null
+                  ? "#ffb7c4"
+                  : disabled || !p.hasData
+                    ? "var(--muted)"
+                    : "var(--neon)",
+              st =
+                p.lastErrorCode != null
+                  ? protErr(p.lastErrorCode)
+                  : disabled
+                    ? "未使能"
+                    : p.hasData
+                      ? "已更新"
+                      : "未刷新";
+            const card = document.createElement("div");
+            card.className = "pc";
+            card.innerHTML = `<div class="ph"><div class="pt">端口${p.portId}</div><div class="ps" style="color:${sc}">${st}</div></div><div class="tiny"><div>电源角色：${stable}</div><div>数据角色：${role}</div></div><div class="psub"><div class="hs" style="color:${hi ? "var(--ok)" : "var(--neon)"}"><div style="display:flex;align-items:center;gap:4px"><span class="bolt ${hi ? "on" : ""}">⚡</span><span>握手协议:</span></div><div style="text-align:center">${hTxt}</div><div></div></div></div><div class="psub"><div class="tiny" style="font-size:11px;color:var(--neon)"><div>协商电压: ${num(p.negotiatedVoltageMv)} mV</div><div>协商电流: ${num(p.negotiatedCurrentMa)} mA</div></div><div class="line" style="opacity:.2;margin:0"></div><div class="kv"><div class="k">当前电压:</div><div class="v">${num(p.mosVoltageMv)}</div><div class="u">mV</div></div><div class="kv"><div class="k">当前电流:</div><div class="v">${num(p.portCurrentMa)}</div><div class="u">mA</div></div><div class="kv"><div class="k">当前功率:</div><div class="v">${pwr}</div><div class="u">mW</div></div></div>`;
+            el.portInfoList.appendChild(card);
+            if (i < arr.length - 1) {
+              const sp = document.createElement("div");
+              sp.className = "line";
+              sp.style.opacity = ".32";
+              sp.style.margin = "2px 4px";
+              el.portInfoList.appendChild(sp);
+            }
+          });
+        }
+        function renderCounter() {
+          el.byteCounter.textContent = `发送字节：${app.tx}    接收字节：${app.rx}`;
+        }
+        const hex = (a) =>
+          Array.from(a, (b) =>
+            (b & 255).toString(16).toUpperCase().padStart(2, "0"),
+          ).join(" ");
+        function txt(a) {
+          try {
+            return new TextDecoder().decode(a);
+          } catch (_) {
+            return "";
+          }
+        }
+        function renderLogs() {
+          if (!app.logs.length) {
+            el.devLogBox.innerHTML = '<div class="le">暂无透传数据</div>';
+            return;
+          }
+          el.devLogBox.innerHTML = app.logs
+            .map(
+              (l) =>
+                `<div class="li ${l.dir === "发送" ? "tx" : "rx"}"><span class="dim">[${fDate(l.ts)} ${fTime(l.ts)}] [${l.dir}]</span>\n${esc(app.hexShow ? hex(l.p) : txt(l.p))}</div>`,
+            )
+            .join("");
+          el.devLogBox.scrollTop = el.devLogBox.scrollHeight;
+        }
+        function renderDev() {
+          el.normalView.style.display = app.dev ? "none" : "flex";
+          el.developerView.style.display = app.dev ? "flex" : "none";
+        }
+        function render() {
+          updConnUI();
+          renderTime();
+          renderRings();
+          renderBat();
+          renderPorts();
+          renderCounter();
+          renderLogs();
+          renderDev();
+        }
+        function parseHex(s) {
+          const c = String(s || "")
+            .replace(/\s+/g, "")
+            .trim();
+          if (!c) return new Uint8Array(0);
+          if (!/^[0-9a-fA-F]+$/.test(c) || c.length % 2) return null;
+          const o = new Uint8Array(c.length / 2);
+          for (let i = 0; i < c.length; i += 2)
+            o[i / 2] = parseInt(c.slice(i, i + 2), 16);
+          return o;
+        }
+        function addLog(dir, p) {
+          const cp = p instanceof Uint8Array ? p.slice() : new Uint8Array(p);
+          app.logs.push({ dir, ts: Date.now(), p: cp });
+          if (app.logs.length > 500) app.logs = app.logs.slice(-500);
+          if (dir === "发送") app.tx += cp.length;
+          else app.rx += cp.length;
+          renderCounter();
+          renderLogs();
+        }
+        function curLine() {
+          const c = Array.from(
+            document.querySelectorAll('input[name="lineEnding"]'),
+          ).find((x) => x.checked);
+          return c ? Number(c.value) : 0;
+        }
+        function buildSend() {
+          if (!app.sendInput.trim()) return new Uint8Array(0);
+          let b = app.hexSend
+            ? parseHex(app.sendInput)
+            : new TextEncoder().encode(app.sendInput);
+          if (b == null) return null;
+          let e = new Uint8Array(0);
+          if (app.lineMode === 1) e = new Uint8Array([0x0a]);
+          else if (app.lineMode === 2) e = new Uint8Array([0x0d, 0x0a]);
+          if (!e.length) return b;
+          const o = new Uint8Array(b.length + e.length);
+          o.set(b, 0);
+          o.set(e, b.length);
+          return o;
+        }
+        const nano = () => Math.floor(performance.now() * 1e6);
+        async function throttle() {
+          const min = MIN_CMD_MS * 1e6,
+            now = nano(),
+            elap = now - app.lastCmdNano;
+          if (app.lastCmdNano && elap >= 0 && elap < min) {
+            const w = Math.ceil((min - elap) / 1e6);
+            if (w > 0) await sleep(w);
+          }
+          app.lastCmdNano = nano();
+        }
+        async function qwrite(bytes, th = false) {
+          app.writeQ = app.writeQ
+            .catch(() => undefined)
+            .then(async () => {
+              if (!app.writer) throw new Error("writer missing");
+              if (th) await throttle();
+              await app.writer.write(bytes);
+            });
+          return app.writeQ;
+        }
+        function crc8(p) {
+          let crc = 0xff;
+          for (let i = 0; i < p.length; i++) {
+            crc ^= p[i] & 255;
+            for (let b = 0; b < 8; b++)
+              crc =
+                (crc & 0x80) !== 0
+                  ? ((crc << 1) ^ 0x07) & 255
+                  : (crc << 1) & 255;
+          }
+          return crc & 255;
+        }
+        function pkt(cmd, data) {
+          const d = data.length > 1024 ? data.slice(0, 1024) : data,
+            len = d.length,
+            ll = len & 255,
+            lh = (len >> 8) & 255,
+            inb = new Uint8Array(3 + len);
+          inb[0] = cmd & 255;
+          inb[1] = ll;
+          inb[2] = lh;
+          if (len) inb.set(d, 3);
+          const c = crc8(inb),
+            o = new Uint8Array(2 + 1 + 2 + len + 1);
+          o[0] = 0xaa;
+          o[1] = 0xbb;
+          o[2] = cmd & 255;
+          o[3] = ll;
+          o[4] = lh;
+          if (len) o.set(d, 5);
+          o[o.length - 1] = c;
+          return o;
+        }
+        function bufAdd(buf, bytes) {
+          for (let i = 0; i < bytes.length; i++) buf.push(bytes[i] & 255);
+          if (buf.length > 4096) {
+            const keep = buf.slice(Math.max(0, buf.length - 256));
+            buf.length = 0;
+            buf.push(...keep);
+          }
+        }
+        function extract(buf) {
+          const fs = [];
+          let idx = 0;
+          while (idx + 6 <= buf.length) {
+            if ((buf[idx] & 255) !== 0xaa || (buf[idx + 1] & 255) !== 0xbb) {
+              idx++;
+              continue;
+            }
+            const cmd = buf[idx + 2] & 255,
+              len = (buf[idx + 3] & 255) | ((buf[idx + 4] & 255) << 8);
+            if (len < 0 || len > 1024) {
+              idx++;
+              continue;
+            }
+            const size = 2 + 1 + 2 + len + 1;
+            if (idx + size > buf.length) break;
+            const ci = new Uint8Array(3 + len);
+            ci[0] = buf[idx + 2] & 255;
+            ci[1] = buf[idx + 3] & 255;
+            ci[2] = buf[idx + 4] & 255;
+            for (let i = 0; i < len; i++) ci[3 + i] = buf[idx + 5 + i] & 255;
+            const ex = buf[idx + size - 1] & 255;
+            if (crc8(ci) !== ex) {
+              idx++;
+              continue;
+            }
+            const p = new Uint8Array(len);
+            for (let i = 0; i < len; i++) p[i] = buf[idx + 5 + i] & 255;
+            fs.push([cmd, p]);
+            idx += size;
+          }
+          if (idx > 0) buf.splice(0, idx);
+          if (buf.length > 4096) {
+            const keep = buf.slice(Math.max(0, buf.length - 256));
+            buf.length = 0;
+            buf.push(...keep);
+          }
+          return fs;
+        }
+        function leInt(raw, signed = false) {
+          if (!raw || !raw.length) return null;
+          const sz = Math.min(raw.length, 4);
+          let v = 0;
+          for (let i = 0; i < sz; i++) v |= (raw[i] & 255) << (i * 8);
+          if (!signed) return v >>> 0;
+          const bits = sz * 8,
+            sign = 1 << (bits - 1),
+            range = 2 ** bits;
+          return v & sign ? v - range : v;
+        }
+        function ascii(raw) {
+          if (!raw || !raw.length) return null;
+          const t = new TextDecoder("ascii", { fatal: false })
+            .decode(raw)
+            .replace(/\u0000/g, " ")
+            .trim();
+          return t || null;
+        }
+        function normDate(s) {
+          const d = String(s || "").replace(/\D+/g, "");
+          return d.length === 8
+            ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`
+            : s;
+        }
+        const m2u = (m) => (Number(m) / 1000).toFixed(2);
+        const d2u = (v) => {
+          const n = Number(v) || 0,
+            sg = n < 0 ? "-" : "",
+            a = Math.abs(n);
+          return `${sg}${Math.floor(a / 10)}.${a % 10}`;
+        };
+        function rtc(raw) {
+          if (!raw || !raw.length) return null;
+          const min = 0,
+            max = 4102444800000,
+            minS = Math.floor(min / 1000),
+            maxS = Math.floor(max / 1000),
+            c = [];
+          const addS = (s) => {
+              if (s >= minS && s <= maxS) c.push(s * 1000 - BEIJING_OFFSET);
+            },
+            addM = (m) => {
+              if (m >= min && m <= max) c.push(m - BEIJING_OFFSET);
+            };
+          const u32le = (o) =>
+              ((raw[o] & 255) |
+                ((raw[o + 1] & 255) << 8) |
+                ((raw[o + 2] & 255) << 16) |
+                ((raw[o + 3] & 255) * 2 ** 24)) >>>
+              0,
+            u32be = (o) =>
+              (((raw[o] & 255) * 2 ** 24) |
+                ((raw[o + 1] & 255) << 16) |
+                ((raw[o + 2] & 255) << 8) |
+                (raw[o + 3] & 255)) >>>
+              0;
+          const u64le = (o) => {
+              let v = 0n;
+              for (let i = 0; i < 8; i++)
+                v |= BigInt(raw[o + i] & 255) << BigInt(i * 8);
+              return v;
+            },
+            u64be = (o) => {
+              let v = 0n;
+              for (let i = 0; i < 8; i++)
+                v = (v << 8n) | BigInt(raw[o + i] & 255);
+              return v;
+            };
+          const struct = (o) => {
+            if (o + 8 >= raw.length || (raw[o] & 255) !== 0x00) return null;
+            const y = (raw[o + 1] & 255) | ((raw[o + 2] & 255) << 8),
+              m = raw[o + 3] & 255,
+              d = raw[o + 4] & 255,
+              h = raw[o + 6] & 255,
+              mi = raw[o + 7] & 255,
+              s = raw[o + 8] & 255;
+            if (
+              y < 2000 ||
+              y > 2100 ||
+              m < 1 ||
+              m > 12 ||
+              d < 1 ||
+              d > 31 ||
+              h > 23 ||
+              mi > 59 ||
+              s > 59
+            )
+              return null;
+            return Date.UTC(y, m - 1, d, h - 8, mi, s, 0);
+          };
+          const ds = Array.from(raw, (b) => {
+            const ch = String.fromCharCode(b & 255);
+            return /\d/.test(ch) ? ch : " ";
+          }).join("");
+          (ds.match(/\d{10,13}/g) || []).forEach((m) => {
+            const v = Number(m);
+            if (!Number.isFinite(v)) return;
+            m.length >= 13 ? addM(v) : addS(v);
+          });
+          for (let o = 0; o < raw.length; o++) {
+            const f = raw[o] & 255;
+            if (f === 0x01 && o + 4 < raw.length) {
+              addS(u32le(o + 1));
+              addS(u32be(o + 1));
+            }
+            const st = struct(o);
+            if (st != null) c.push(st);
+          }
+          if (raw.length >= 4) {
+            for (let o = 0; o <= raw.length - 4; o++) {
+              const l = u32le(o),
+                b = u32be(o);
+              addS(l);
+              addS(b);
+              addM(l);
+              addM(b);
+            }
+          }
+          if (raw.length >= 8) {
+            for (let o = 0; o <= raw.length - 8; o++) {
+              const l = u64le(o),
+                b = u64be(o),
+                ln =
+                  l <= BigInt(Number.MAX_SAFE_INTEGER)
+                    ? Number(l)
+                    : Number.MAX_SAFE_INTEGER,
+                bn =
+                  b <= BigInt(Number.MAX_SAFE_INTEGER)
+                    ? Number(b)
+                    : Number.MAX_SAFE_INTEGER;
+              addS(ln);
+              addS(bn);
+              addM(ln);
+              addM(bn);
+            }
+          }
+          if (!c.length) return null;
+          const now = Date.now();
+          let best = c[0],
+            diff = Math.abs(best - now);
+          for (let i = 1; i < c.length; i++) {
+            const d = Math.abs(c[i] - now);
+            if (d < diff) {
+              best = c[i];
+              diff = d;
+            }
+          }
+          return best;
+        }
+        function decodePort(raw, req) {
+          if (!raw || raw.length < 15) return null;
+          const mask = raw[0] & 255,
+            off = 1,
+            b0 = raw[off] & 255,
+            b1 = raw[off + 1] & 255,
+            r16 = (i) => (raw[off + i] & 255) | ((raw[off + i + 1] & 255) << 8),
+            fb = (b0 >> 5) & 0x03,
+            t = req != null && req >= 0 && req < PORT_COUNT ? req : fb,
+            en = ((mask >> t) & 1) === 1;
+          if (!en)
+            return {
+              portId: t,
+              enableKnown: true,
+              portEnabled: false,
+              hasData: false,
+              lastErrorCode: null,
+              feedbackPortId: t,
+            };
+          return {
+            portId: t,
+            enableKnown: true,
+            portEnabled: true,
+            hasData: true,
+            lastErrorCode: null,
+            realtimeOutputState: b0 & 0x03,
+            stableOutputState: (b0 >> 2) & 0x03,
+            typecMosEnabled: ((b0 >> 4) & 1) === 1,
+            feedbackPortId: fb,
+            pdHandshakeOk: (b1 & 1) === 1,
+            pdProtocolType: (b1 >> 1) & 0x03,
+            pdDataRole: (b1 >> 3) & 0x01,
+            negotiatedVoltageMv: r16(2),
+            negotiatedCurrentMa: r16(4),
+            backBoostVoltageMv: r16(6),
+            mosVoltageMv: r16(8),
+            mosVoltageRefreshed: true,
+            portCurrentMa: r16(10),
+            portCurrentRefreshed: true,
+            dpdmProtocolCode: raw[off + 12] & 255,
+            protectionFlags: raw[off + 13] & 255,
+          };
+        }
+        const popData = () =>
+            app.pendingData.length ? app.pendingData.shift() : null,
+          popPort = () =>
+            app.pendingPort.length ? app.pendingPort.shift() : null;
+        function enqData(t) {
+          const i = app.pendingData.indexOf(t);
+          if (i >= 0) app.pendingData.splice(i, 1);
+          app.pendingData.push(t);
+        }
+        function enqPort(p) {
+          const v = Math.max(0, Math.min(PORT_COUNT - 1, Number(p) || 0)),
+            i = app.pendingPort.indexOf(v);
+          if (i >= 0) app.pendingPort.splice(i, 1);
+          app.pendingPort.push(v);
+        }
+        function onDataFrame(rawCmd, p) {
+          const cmd = rawCmd & 0x7f;
+          if (cmd === CMD_RTC) {
+            const d = rtc(p);
+            if (d != null) {
+              app.pbMs = d;
+              renderTime();
+            }
+            if (app.rtcSyncWaiting) {
+              clearRtcSyncWait();
+              toast("RTC同步成功");
+            }
+            return;
+          }
+          if (cmd === CMD_DATA) {
+            const fb = popData(),
+              dt = p.length >= 2 ? p[0] & 255 : null,
+              has = dt != null && dt >= 0 && dt <= DT_MAX,
+              t = has ? dt : fb;
+            if (t == null) return;
+            const vr = has ? p.slice(1) : p,
+              vu = leInt(vr, false),
+              d = app.bat;
+            switch (t) {
+              case DT_TEMP:
+                if (vu == null) return;
+                app.bat = { ...d, batteryTemperature: d2u(vu) };
+                break;
+              case DT_VOLT:
+                if (vu == null) return;
+                app.bat = { ...d, packVoltage: m2u(vu) };
+                break;
+              case DT_C1:
+                if (vu == null) return;
+                app.bat = { ...d, cellVoltage1: m2u(vu) };
+                break;
+              case DT_C2:
+                if (vu == null) return;
+                app.bat = { ...d, cellVoltage2: m2u(vu) };
+                break;
+              case DT_CUR: {
+                const vs = leInt(vr, true);
+                if (vs == null) return;
+                app.bat = { ...d, packCurrent: m2u(vs) };
+                break;
+              }
+              case DT_RC:
+                if (vu == null) return;
+                app.bat = { ...d, remainingCapacity: String(vu) };
+                break;
+              case DT_FC:
+                if (vu == null) return;
+                app.bat = { ...d, fullChargeCapacity: String(vu) };
+                break;
+              case DT_DC:
+                if (vu == null) return;
+                app.bat = { ...d, designCapacity: String(vu) };
+                app.pendingStatic.delete(DT_DC);
+                break;
+              case DT_TTE:
+                if (vu == null) return;
+                app.bat = { ...d, estimateDischargeMinutes: String(vu) };
+                break;
+              case DT_TTF:
+                if (vu == null) return;
+                app.bat = { ...d, estimateChargeMinutes: String(vu) };
+                break;
+              case DT_CYCLE:
+                if (vu == null) return;
+                app.bat = { ...d, cycleCount: String(vu) };
+                break;
+              case DT_SOC:
+                if (vu == null) return;
+                app.soc = Math.max(0, Math.min(100, vu));
+                break;
+              case DT_SOH:
+                if (vu == null) return;
+                app.soh = Math.max(0, Math.min(100, vu));
+                break;
+              case DT_COUNT:
+                break;
+              case DT_TYPE: {
+                const v = ascii(vr);
+                if (!v) return;
+                app.bat = { ...d, batteryType: v };
+                app.pendingStatic.delete(DT_TYPE);
+                break;
+              }
+              case DT_VENDOR: {
+                const v = ascii(vr);
+                if (!v) return;
+                app.bat = { ...d, batteryVendor: v };
+                app.pendingStatic.delete(DT_VENDOR);
+                break;
+              }
+              case DT_DATE: {
+                const v = ascii(vr);
+                if (!v) return;
+                app.bat = { ...d, productionDate: normDate(v) };
+                app.pendingStatic.delete(DT_DATE);
+                break;
+              }
+              case DT_STATUS:
+                if (vu == null) return;
+                {
+                  const m = vu === 0 ? 0 : vu === 1 ? 2 : vu === 2 ? 1 : null;
+                  if (m != null) app.status = m;
+                }
+                break;
+              default:
+                break;
+            }
+            renderBat();
+            renderRings();
+            return;
+          }
+          if (cmd === CMD_PORT) {
+            const req = popPort();
+            if (p.length === 1) {
+              const e = p[0] & 255;
+              if (req != null) {
+                const old = app.portsInfo.get(req) || {};
+                app.portsInfo.set(req, {
+                  ...old,
+                  hasData: false,
+                  lastErrorCode: e,
+                  mosVoltageRefreshed: false,
+                  portCurrentRefreshed: false,
+                });
+                renderPorts();
+              }
+              return;
+            }
+            const dec = decodePort(p, req);
+            if (!dec) return;
+            const t = dec.portId,
+              old = app.portsInfo.get(t) || {};
+            app.portsInfo.set(t, {
+              ...old,
+              ...dec,
+              portId: t,
+              lastErrorCode: null,
+            });
+            renderPorts();
+          }
+        }
+        function getSelTest() {
+          return TEST_OPTS.find((x) => x.id === app.testSel) || TEST_OPTS[0];
+        }
+        function applyTestVal(pid, v, src) {
+          const n = pid === 0x00 ? (v === 0 ? 0 : 1) : v;
+          app.testMap.set(pid, n);
+          if (pid === 0x00) app.ltVal = n === 0 ? 1 : 0;
+          else if (app.testSel === pid && app.testVal !== String(n))
+            app.testVal = String(n);
+          const op = TEST_OPTS.find((x) => x.id === pid);
+          const lb = op
+            ? op.label
+            : `参数0x${(pid & 255).toString(16).toUpperCase().padStart(2, "0")}`;
+          app.testTip = `${src}：${lb} = ${n}`;
+          renderTestUi();
+        }
+        function onTestFrame(rawCmd, p) {
+          const cmd = rawCmd & 0x7f;
+          if (cmd === CMD_GET_TEST) {
+            if (!p.length) return;
+            if (p.length === 1 && (p[0] & 255) === 0x00) {
+              app.testTip = "获取测试数据失败：参数错误";
+              toast(app.testTip);
+              renderTestUi();
+              return;
+            }
+            const pid = p[0] & 255;
+            if (pid === 0x00) {
+              if (p.length >= 2) applyTestVal(pid, p[1] & 255, "设备回复");
+            } else if (pid === 0x01) {
+              if (p.length >= 3)
+                applyTestVal(
+                  pid,
+                  (p[1] & 255) | ((p[2] & 255) << 8),
+                  "设备回复",
+                );
+            }
+            return;
+          }
+          if (cmd === CMD_SET_TEST) {
+            if (!p.length) return;
+            if ((p[0] & 255) === 0x01) {
+              app.testTip = "发送测试数据成功，正在同步设备值";
+              renderTestUi();
+              sendGetTest(app.lastTestReq, false);
+            } else if ((p[0] & 255) === 0x00) {
+              app.testTip = "发送测试数据失败：参数错误";
+              renderTestUi();
+              toast(app.testTip);
+            }
+          }
+        }
+        function feedData(bytes) {
+          if (!bytes || !bytes.length) return;
+          bufAdd(app.bufData, bytes);
+          extract(app.bufData).forEach(([c, p]) => onDataFrame(c, p));
+        }
+        function feedTest(bytes) {
+          if (!bytes || !bytes.length) return;
+          bufAdd(app.bufTest, bytes);
+          extract(app.bufTest).forEach(([c, p]) => onTestFrame(c, p));
+        }
+        const bjSec = () =>
+          Math.max(
+            0,
+            Math.min(
+              0xffffffff,
+              Math.floor((Date.now() + BEIJING_OFFSET) / 1000),
+            ),
+          );
+        function bjParts() {
+          const utc = Date.now() + new Date().getTimezoneOffset() * 60000,
+            bj = utc + BEIJING_OFFSET,
+            d = new Date(bj);
+          return {
+            y: d.getUTCFullYear(),
+            m: d.getUTCMonth() + 1,
+            d: d.getUTCDate(),
+            w: (d.getUTCDay() + 6) % 7,
+            h: d.getUTCHours(),
+            mi: d.getUTCMinutes(),
+            s: d.getUTCSeconds(),
+          };
+        }
+        function setRtcPayload() {
+          if (app.setRtcFmt === 0) {
+            const n = bjParts();
+            return new Uint8Array([
+              0x00,
+              n.y & 255,
+              (n.y >> 8) & 255,
+              n.m & 255,
+              n.d & 255,
+              n.w & 255,
+              n.h & 255,
+              n.mi & 255,
+              n.s & 255,
+            ]);
+          }
+          const s = bjSec();
+          return new Uint8Array([
+            0x01,
+            s & 255,
+            (s >> 8) & 255,
+            (s >> 16) & 255,
+            (s >> 24) & 255,
+          ]);
+        }
+        function setRtcUnix() {
+          const s = bjSec();
+          return new Uint8Array([
+            0x01,
+            s & 255,
+            (s >> 8) & 255,
+            (s >> 16) & 255,
+            (s >> 24) & 255,
+          ]);
+        }
+        async function sendRaw(payload, tip, msg, th = false) {
+          if (!app.isConnected || !app.writer) {
+            if (tip) toast("未连接设备，无法发送");
+            return false;
+          }
+          if (!payload || !payload.length) {
+            if (tip) toast("发送内容为空");
+            return false;
+          }
+          try {
+            let off = 0;
+            while (off < payload.length) {
+              const end = Math.min(off + 256, payload.length);
+              await qwrite(payload.slice(off, end), th);
+              off = end;
+            }
+            addLog("发送", payload);
+            if (tip) toast(msg || `已发送${payload.length}字节`);
+            return true;
+          } catch (_) {
+            if (tip) toast("发送失败，请检查设备连接");
+            await disconn("透传通道已断开，请重新连接", false);
+            return false;
+          }
+        }
+        async function sendCmd(name, cmd, data = new Uint8Array()) {
+          const p = pkt(cmd, data);
+          return sendRaw(p, true, `${name} 已发送(${p.length}字节)`, true);
+        }
+        async function sendData(
+          cmd,
+          data = new Uint8Array(),
+          ed = null,
+          ep = null,
+        ) {
+          if (!app.isConnected || !app.writer) return false;
+          const p = pkt(cmd, data);
+          try {
+            let off = 0;
+            while (off < p.length) {
+              const end = Math.min(off + 256, p.length);
+              await qwrite(p.slice(off, end), true);
+              off = end;
+            }
+            if (ed != null) enqData(ed);
+            if (ep != null) enqPort(ep);
+            return true;
+          } catch (_) {
+            await disconn("透传通道已断开，请重新连接", false);
+            return false;
+          }
+        }
+        async function sendNow(tip) {
+          app.sendInput = el.sendInput.value || "";
+          const p = buildSend();
+          if (p == null) {
+            if (tip) toast("HEX格式错误，请输入偶数字节");
+            return;
+          }
+          await sendRaw(p, tip, null, false);
+        }
+        function resetData() {
+          app.soc = 0;
+          app.soh = 0;
+          app.status = 0;
+          app.pbMs = app.pbDefault;
+          app.bat = defBat();
+          app.pendingStatic = new Set(STATIC_TYPES);
+          app.portsInfo = defPorts();
+          app.pendingData = [];
+          app.pendingPort = [];
+          app.bufData = [];
+          app.bufTest = [];
+          render();
+        }
+        async function readLoop() {
+          if (!app.activePort || !app.activePort.readable) return;
+          app.readActive = true;
+          try {
+            app.reader = app.activePort.readable.getReader();
+            while (app.readActive) {
+              const { value, done } = await app.reader.read();
+              if (done) break;
+              if (value && value.length) {
+                const c =
+                  value instanceof Uint8Array ? value : new Uint8Array(value);
+                addLog("接收", c);
+                feedTest(c);
+                feedData(c);
+              }
+            }
+          } catch (_) {
+            if (app.readActive)
+              await disconn("透传通道已断开，请重新连接", false);
+          } finally {
+            if (app.reader) {
+              try {
+                app.reader.releaseLock();
+              } catch (_) {}
+            }
+            app.reader = null;
+          }
+        }
+        async function openSel(show = true) {
+          if (!app.supported) {
+            if (show) toast("当前浏览器不支持 Web Serial API");
+            return false;
+          }
+          if (
+            app.selPort == null ||
+            app.selPort < 0 ||
+            app.selPort >= app.ports.length
+          ) {
+            if (show) toast("未选择USB端口");
+            return false;
+          }
+          const p = app.ports[app.selPort];
+          if (!p) {
+            if (show) toast("未找到USB设备，无法连接");
+            return false;
+          }
+          if (app.activePort && app.activePort === p && app.writer) return true;
+          await cleanup(false);
+          try {
+            await p.open({
+              baudRate: app.baud,
+              dataBits: 8,
+              stopBits: 1,
+              parity: "none",
+              flowControl: "none",
+            });
+          } catch (_) {
+            if (show) toast("串口初始化失败，请检查设备类型与波特率");
+            return false;
+          }
+          app.activePort = p;
+          app.writer = p.writable ? p.writable.getWriter() : null;
+          app.isConnected = !!app.writer;
+          app.lastCmdNano = 0;
+          app.writeQ = Promise.resolve();
+          updConnUI();
+          if (!app.writer) {
+            if (show) toast("透传通道未就绪，请检查USB权限和串口");
+            return false;
+          }
+          readLoop();
+          startPoll();
+          return true;
+        }
+        async function cleanup(reset) {
+          app.readActive = false;
+          stopPoll();
+          stopTimed();
+          clearRtcSyncWait();
+          if (app.reader) {
+            try {
+              await app.reader.cancel();
+            } catch (_) {}
+            try {
+              app.reader.releaseLock();
+            } catch (_) {}
+            app.reader = null;
+          }
+          if (app.writer) {
+            try {
+              app.writer.releaseLock();
+            } catch (_) {}
+            app.writer = null;
+          }
+          if (app.activePort) {
+            try {
+              await app.activePort.close();
+            } catch (_) {}
+            app.activePort = null;
+          }
+          app.isConnected = false;
+          app.lastCmdNano = 0;
+          app.writeQ = Promise.resolve();
+          if (reset) resetData();
+          updConnUI();
+        }
+        async function disconn(msg, reset = true) {
+          await cleanup(reset);
+          if (msg) toast(msg);
+        }
+        async function conn(prefer = null, msg = null) {
+          if (!app.ports.length) {
+            app.isConnected = false;
+            resetData();
+            toast("未接入设备，无法连接");
+            return false;
+          }
+          if (prefer != null && prefer >= 0 && prefer < app.ports.length)
+            app.selPort = prefer;
+          if (
+            app.selPort == null ||
+            app.selPort < 0 ||
+            app.selPort >= app.ports.length
+          )
+            app.selPort = 0;
+          const ok = await openSel(false);
+          if (ok && msg) toast(msg);
+          updConnUI();
+          return ok;
+        }
+        function stopPoll() {
+          app.dataToken++;
+          app.portToken++;
+        }
+        function startPoll() {
+          stopPoll();
+          if (!app.isConnected || app.dev) return;
+          const dt = ++app.dataToken,
+            pt = ++app.portToken;
+          (async () => {
+            while (dt === app.dataToken && app.isConnected && !app.dev) {
+              const st = Date.now();
+              await sendData(CMD_ACK);
+              await sleep(5);
+              await sendData(CMD_RTC, new Uint8Array([0x01]));
+              const types = [...DYNAMIC_TYPES];
+              STATIC_TYPES.forEach((t) => {
+                if (app.pendingStatic.has(t)) types.push(t);
+              });
+              for (let i = 0; i < types.length; i++) {
+                await sleep(i === 0 ? 5 : 3);
+                const t = types[i];
+                await sendData(CMD_DATA, new Uint8Array([t & 255]), t, null);
+              }
+              await sleep(Math.max(0, 1000 - (Date.now() - st)));
+            }
+          })();
+          (async () => {
+            while (pt === app.portToken && app.isConnected && !app.dev) {
+              const st = Date.now();
+              for (let p = 0; p < PORT_COUNT; p++) {
+                if (p > 0) await sleep(5);
+                await sendData(CMD_PORT, new Uint8Array([p & 255]), null, p);
+              }
+              await sleep(Math.max(0, 400 - (Date.now() - st)));
+            }
+          })();
+        }
+        function stopTimed() {
+          if (app.timedTimer) {
+            clearInterval(app.timedTimer);
+            app.timedTimer = null;
+          }
+        }
+        function restartTimed() {
+          stopTimed();
+          if (!app.timed) return;
+          const iv = Math.max(
+            100,
+            Math.min(60000, Number.parseInt(app.timedText, 10) || 1000),
+          );
+          app.timedTimer = setInterval(() => {
+            if (app.timed) sendNow(false);
+          }, iv);
+        }
+        async function refreshPorts() {
+          if (!app.supported) return;
+          let ps = [];
+          try {
+            ps = await navigator.serial.getPorts();
+          } catch (_) {
+            ps = [];
+          }
+          const prevPorts = app.ports.slice();
+          app.ports = ps;
+          const sigCount = (list) => {
+            const m = new Map();
+            list.forEach((p) => {
+              const i = typeof p.getInfo === "function" ? p.getInfo() : {};
+              const key = `${i.usbVendorId ?? "na"}:${i.usbProductId ?? "na"}`;
+              m.set(key, (m.get(key) || 0) + 1);
+            });
+            return m;
+          };
+          const prevSig = sigCount(prevPorts),
+            nextSig = sigCount(app.ports),
+            hasNewPort = [...nextSig.entries()].some(
+              ([k, v]) => v > (prevSig.get(k) || 0),
+            );
+          if (app.selPort == null || app.selPort >= app.ports.length)
+            app.selPort = app.ports.length ? 0 : null;
+          if (app.activePort && !app.ports.includes(app.activePort))
+            await disconn("USB设备已断开，连接已关闭", true);
+          if (hasNewPort && !app.isConnected)
+            await conn(0, "检测到新USB端口，已自动开启连接");
+          updConnUI();
+        }
+        async function reqPort() {
+          if (!app.supported) {
+            toast("当前浏览器不支持 Web Serial API");
+            return;
+          }
+          try {
+            await clearAuthExcept(null);
+            const p = await navigator.serial.requestPort();
+            await refreshPorts();
+            if (!app.ports.includes(p)) app.ports.push(p);
+            await clearAuthExcept(p);
+            app.selPort = app.ports.indexOf(p);
+            if (
+              app.selPort == null ||
+              app.selPort < 0 ||
+              app.selPort >= app.ports.length
+            )
+              app.selPort = app.ports.length ? 0 : null;
+            updConnUI();
+            updCfg();
+            toast("USB权限已授予，仅保留当前端口授权");
+          } catch (e) {
+            if (e && e.name === "NotFoundError") return;
+            toast("请求USB权限失败，请重试");
+          }
+        }
+        function updCfg() {
+          if (
+            app.selPort == null ||
+            app.selPort < 0 ||
+            app.selPort >= app.ports.length
+          )
+            app.selPort = app.ports.length ? 0 : null;
+          el.authorizedPortText.textContent = `已授权端口：${portLabel(app.selPort)}`;
+          el.baudSelectGrid.innerHTML = "";
+          app.common.forEach((bd) => {
+            const on = !app.useCustom && app.baud === bd;
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = `c ${on ? "on" : ""}`;
+            b.textContent = String(bd);
+            b.onclick = () => {
+              app.useCustom = false;
+              app.baud = bd;
+              el.useCustomBaud.checked = false;
+              el.customBaudInput.value = "";
+              el.serialConfigError.textContent = "";
+              updCfg();
+            };
+            el.baudSelectGrid.appendChild(b);
+          });
+          el.useCustomBaud.checked = app.useCustom;
+          el.customBaudInput.value = app.useCustom ? String(app.baud) : "";
+        }
+        const openCfg = () => {
+          updCfg();
+          el.serialConfigError.textContent = "";
+          el.serialConfigModal.classList.add("show");
+        };
+        const closeCfg = () => el.serialConfigModal.classList.remove("show");
+        const normBaud = (s) =>
+          String(s || "")
+            .replace(/\s+/g, "")
+            .trim();
+        async function saveCfg() {
+          let fb;
+          if (el.useCustomBaud.checked) {
+            const n = normBaud(el.customBaudInput.value);
+            if (!/^\d{1,7}$/.test(n)) {
+              el.serialConfigError.textContent = "请输入数字波特率";
+              return;
+            }
+            const p = Number.parseInt(n, 10);
+            if (!Number.isFinite(p) || p < 300 || p > 3000000) {
+              el.serialConfigError.textContent =
+                "波特率范围需在300到3000000之间";
+              return;
+            }
+            fb = p;
+            app.useCustom = true;
+          } else {
+            fb = app.baud;
+            app.useCustom = false;
+          }
+          app.baud = fb;
+          closeCfg();
+          updConnUI();
+          if (app.isConnected)
+            await disconn("连接参数已更新，请重新连接", false);
+        }
+        function devMode(on) {
+          app.dev = on;
+          renderDev();
+          if (on) {
+            stopPoll();
+            toast("已进入开发者模式");
+          } else {
+            startPoll();
+            toast("已退出开发者模式");
+          }
+        }
+        function titleTap() {
+          if (app.dev) return;
+          const n = Date.now();
+          app.tapCount = n - app.lastTap <= DEV_TAP_MS ? app.tapCount + 1 : 1;
+          app.lastTap = n;
+          if (app.tapCount === 3) toast("再点击2次进入开发者模式");
+          if (app.tapCount === 4) toast("再点击1次进入开发者模式");
+          if (app.tapCount >= 5) {
+            app.tapCount = 0;
+            devMode(true);
+          }
+        }
+        function cmdSel() {
+          el.getDataTypeGrid.innerHTML = "";
+          GET_DATA_OPTS.forEach(([v, l]) => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = `c ${app.getDataType === v ? "on" : ""}`;
+            b.textContent = l;
+            b.onclick = () => {
+              app.getDataType = v;
+              cmdSel();
+            };
+            el.getDataTypeGrid.appendChild(b);
+          });
+          el.rtcFormatGrid.innerHTML = "";
+          RTC_OPTS.forEach(([v, l]) => {
+            const on = app.getRtcFmt === v || app.setRtcFmt === v;
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = `c ${on ? "on" : ""}`;
+            b.textContent = l;
+            b.onclick = () => {
+              app.getRtcFmt = v;
+              app.setRtcFmt = v;
+              cmdSel();
+            };
+            el.rtcFormatGrid.appendChild(b);
+          });
+          el.protPortTypeGrid.innerHTML = "";
+          PORT_OPTS.forEach(([v, l]) => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = `c ${app.protType === v ? "on" : ""}`;
+            b.textContent = l;
+            b.onclick = () => {
+              app.protType = v;
+              cmdSel();
+            };
+            el.protPortTypeGrid.appendChild(b);
+          });
+          el.setRtcNote.textContent =
+            app.setRtcFmt === 0
+              ? "SET_RTC将直接发送北京时间（正常时间格式）"
+              : "SET_RTC将直接发送北京时间Unix时间戳（秒）";
+        }
+        function renderTestUi() {
+          const show = app.admin;
+          el.adminStateText.style.display = show ? "block" : "none";
+          el.adminLoginBtn.style.display = show ? "none" : "inline-block";
+          el.adminTestBlocked.style.display = show ? "none" : "block";
+          el.adminTestSection.style.display = show ? "block" : "none";
+          if (!show) return;
+          const sel = getSelTest(),
+            dv = app.testMap.has(sel.id) ? app.testMap.get(sel.id) : null;
+          if (sel.id === 0x00) app.testVal = String(app.ltVal);
+          else if (dv != null) app.testVal = String(dv);
+          el.testParamGrid.innerHTML = "";
+          TEST_OPTS.forEach((o) => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = `c ${app.testSel === o.id ? "on" : ""}`;
+            b.textContent = o.label;
+            b.onclick = () => {
+              app.testSel = o.id;
+              const val = app.testMap.has(o.id) ? app.testMap.get(o.id) : o.def;
+              app.testVal = String(val);
+              renderTestUi();
+            };
+            el.testParamGrid.appendChild(b);
+          });
+          el.testParamRange.textContent = `当前参数ID: 0x${(sel.id & 255).toString(16).toUpperCase().padStart(2, "0")}    取值范围: ${sel.min}-${sel.max}${sel.unit}`;
+          el.testDeviceValue.textContent = `设备当前值: ${dv != null ? dv : "---"}${sel.unit}`;
+          el.testResponseTip.textContent = app.testTip;
+          el.testQuickGrid.innerHTML = "";
+          sel.quick.forEach((it) => {
+            const on =
+              sel.id === 0x00
+                ? app.ltVal === it.v
+                : Number.parseInt(app.testVal, 10) === it.v;
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = `c ${on ? "on" : ""}`;
+            b.textContent = `${it.l}${sel.unit}`;
+            b.onclick = () => {
+              if (sel.id === 0x00) app.ltVal = it.v;
+              else app.testVal = String(it.v);
+              renderTestUi();
+            };
+            el.testQuickGrid.appendChild(b);
+          });
+          if (sel.id === 0x00) {
+            el.setTestValueInput.style.display = "none";
+          } else {
+            el.setTestValueInput.style.display = "block";
+            el.setTestValueInput.placeholder = `SET_TEST数值（${sel.min}-${sel.max}${sel.unit}）`;
+            el.setTestValueInput.value = app.testVal;
+          }
+        }
+        async function sendTestPkt(packet, tip, msg) {
+          if (!app.isConnected) {
+            if (tip) toast("未连接设备，无法发送");
+            return false;
+          }
+          if (!app.writer) {
+            if (tip) toast("透传通道未就绪，请先连接设备并授权USB");
+            return false;
+          }
+          return sendRaw(packet, tip, msg, true);
+        }
+        async function sendGetTest(pid, tip = true) {
+          app.lastTestReq = pid;
+          app.testTip = "已发送获取请求，等待设备回复...";
+          renderTestUi();
+          const p = pkt(CMD_GET_TEST, new Uint8Array([pid & 255]));
+          await sendTestPkt(p, tip, `获取测试数据 已发送(${p.length}字节)`);
+        }
+        async function sendSetTest(pid, val, tip = true) {
+          app.lastTestReq = pid;
+          app.testTip = "已发送设置请求，等待设备确认...";
+          renderTestUi();
+          const pl =
+            pid === 0x00
+              ? new Uint8Array([pid & 255, val & 255])
+              : new Uint8Array([pid & 255, val & 255, (val >> 8) & 255]);
+          const p = pkt(CMD_SET_TEST, pl);
+          await sendTestPkt(p, tip, `发送测试数据 已发送(${p.length}字节)`);
+        }
+        async function syncRtc() {
+          if (!app.isConnected) {
+            toast("未连接设备，无法同步RTC");
+            return;
+          }
+          if (!app.writer) {
+            toast("透传未就绪，RTC同步失败");
+            return;
+          }
+          if (app.rtcSyncWaiting) {
+            toast("RTC同步进行中，请稍候");
+            return;
+          }
+          const sent = await sendData(CMD_SET_RTC, setRtcUnix());
+          if (!sent) {
+            toast("发送 SET_RTC 失败");
+            return;
+          }
+          clearRtcSyncWait();
+          app.rtcSyncWaiting = true;
+          app.rtcSyncWaitTimer = setTimeout(() => {
+            if (!app.rtcSyncWaiting) return;
+            clearRtcSyncWait();
+            toast("RTC同步超时，请重试");
+          }, 5000);
+          const reqSent = await sendData(CMD_RTC, new Uint8Array([0x01]));
+          if (!reqSent) {
+            clearRtcSyncWait();
+            toast("发送 GET_RTC 失败");
+            return;
+          }
+        }
+        function openCmd() {
+          cmdSel();
+          renderTestUi();
+          el.commandModal.classList.add("show");
+        }
+        function closeCmd() {
+          el.commandModal.classList.remove("show");
+          el.adminModal.classList.remove("show");
+        }
+        function openAdmin() {
+          app.pwdInput = "";
+          app.pwdShow = false;
+          app.pwdErr = "";
+          el.adminPasswordInput.type = "password";
+          el.adminPasswordInput.value = "";
+          el.toggleAdminPasswordBtn.textContent = "显示密码";
+          el.adminLoginError.textContent = "";
+          el.adminModal.classList.add("show");
+        }
+        const closeAdmin = () => el.adminModal.classList.remove("show");
+        function bind() {
+          el.topTitle.onclick = titleTap;
+          el.statusConfigBtn.onclick = openCfg;
+          el.requestPortBtn.onclick = async () => {
+            await reqPort();
+          };
+          el.connectToggleBtn.onclick = async () => {
+            if (app.isConnected) {
+              await disconn("连接已断开，透传已关闭", true);
+              return;
+            }
+            if (!app.ports.length) await reqPort();
+            const ok = await conn(null, "连接成功，透传已开启");
+            if (!ok && app.supported && !app.ports.length)
+              toast("未接入设备，无法连接");
+          };
+          el.syncRtcBtn.onclick = () => syncRtc();
+          el.exitDevBtn.onclick = () => devMode(false);
+          el.hexSendEnabled.onchange = () => {
+            app.hexSend = el.hexSendEnabled.checked;
+            el.sendInput.placeholder = app.hexSend
+              ? "发送区（HEX）"
+              : "发送区（文本）";
+          };
+          el.hexDisplayEnabled.onchange = () => {
+            app.hexShow = el.hexDisplayEnabled.checked;
+            renderLogs();
+          };
+          el.timedSendEnabled.onchange = () => {
+            app.timed = el.timedSendEnabled.checked;
+            el.timedIntervalText.disabled = !app.timed;
+            restartTimed();
+          };
+          el.timedIntervalText.oninput = () => {
+            el.timedIntervalText.value = el.timedIntervalText.value
+              .replace(/\D+/g, "")
+              .slice(0, 5);
+            app.timedText = el.timedIntervalText.value || "1000";
+            if (app.timed) restartTimed();
+          };
+          document.querySelectorAll('input[name="lineEnding"]').forEach(
+            (r) =>
+              (r.onchange = () => {
+                app.lineMode = curLine();
+              }),
+          );
+          el.sendInput.oninput = () => {
+            app.sendInput = el.sendInput.value;
+          };
+          el.sendInput.onkeydown = (e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              sendNow(true);
+            }
+          };
+          el.openCmdBtn.onclick = openCmd;
+          el.clearDevBtn.onclick = () => {
+            app.logs = [];
+            app.tx = 0;
+            app.rx = 0;
+            renderCounter();
+            renderLogs();
+            toast("已清空透传数据");
+          };
+          el.sendDevBtn.onclick = () => sendNow(true);
+          el.cancelSerialConfigBtn.onclick = closeCfg;
+          el.useCustomBaud.onchange = () => {
+            app.useCustom = el.useCustomBaud.checked;
+          };
+          el.customBaudInput.onfocus = () => {
+            app.useCustom = true;
+            el.useCustomBaud.checked = true;
+          };
+          el.saveSerialConfigBtn.onclick = saveCfg;
+          el.serialConfigModal.onclick = (e) => {
+            if (e.target === el.serialConfigModal) closeCfg();
+          };
+          el.closeCommandModalBtn.onclick = closeCmd;
+          el.commandModal.onclick = (e) => {
+            if (e.target === el.commandModal) closeCmd();
+          };
+          el.adminLoginBtn.onclick = openAdmin;
+          el.cmdGetAckBtn.onclick = () => sendCmd("USB_CMD_GET_ACK", 0x00);
+          el.cmdGetInfoBtn.onclick = () => sendCmd("USB_CMD_GET_INFO", 0x01);
+          el.sendGetDataBtn.onclick = () =>
+            sendCmd(
+              "USB_CMD_GET_DATA",
+              0x02,
+              new Uint8Array([app.getDataType & 255]),
+            );
+          el.sendGetRtcBtn.onclick = () =>
+            sendCmd(
+              "USB_CMD_GET_RTC",
+              0x03,
+              new Uint8Array([app.getRtcFmt & 255]),
+            );
+          el.sendSetRtcBtn.onclick = () =>
+            sendCmd("USB_CMD_SET_RTC", 0x04, setRtcPayload());
+          el.sendGetPortBtn.onclick = () =>
+            sendCmd(
+              "USB_CMD_GET_PROT_DATA",
+              0x05,
+              new Uint8Array([app.protType & 255]),
+            );
+          el.sendGetTestBtn.onclick = () => sendGetTest(app.testSel, true);
+          el.sendSetTestBtn.onclick = () => {
+            const s = getSelTest();
+            if (s.id === 0x00) {
+              sendSetTest(s.id, app.ltVal, true);
+              return;
+            }
+            const v = Number.parseInt(el.setTestValueInput.value, 10);
+            if (!Number.isFinite(v) || v < s.min || v > s.max) {
+              toast(`参数超出范围：${s.min}-${s.max}${s.unit}`);
+              return;
+            }
+            app.testVal = String(v);
+            sendSetTest(s.id, v, true);
+          };
+          el.setTestValueInput.oninput = () => {
+            el.setTestValueInput.value = el.setTestValueInput.value
+              .replace(/\D+/g, "")
+              .slice(0, 5);
+            app.testVal = el.setTestValueInput.value;
+          };
+          el.cancelAdminBtn.onclick = closeAdmin;
+          el.toggleAdminPasswordBtn.onclick = () => {
+            app.pwdShow = !app.pwdShow;
+            el.adminPasswordInput.type = app.pwdShow ? "text" : "password";
+            el.toggleAdminPasswordBtn.textContent = app.pwdShow
+              ? "隐藏密码"
+              : "显示密码";
+          };
+          el.confirmAdminBtn.onclick = () => {
+            app.pwdInput = el.adminPasswordInput.value;
+            if (app.pwdInput === ADMIN_PWD) {
+              app.admin = true;
+              app.pwdErr = "";
+              closeAdmin();
+              renderTestUi();
+              toast("管理员权限已开启");
+            } else {
+              app.pwdErr = "密码错误，请注意大小写";
+              el.adminLoginError.textContent = app.pwdErr;
+            }
+          };
+          el.adminModal.onclick = (e) => {
+            if (e.target === el.adminModal) closeAdmin();
+          };
+          if (app.supported) {
+            navigator.serial.addEventListener("connect", async () => {
+              await refreshPorts();
+            });
+            navigator.serial.addEventListener("disconnect", async () => {
+              await refreshPorts();
+            });
+          }
+        }
+        function periodic() {
+          if (app.phoneTimer) clearInterval(app.phoneTimer);
+          app.phoneTimer = setInterval(() => {
+            app.phoneMs = Date.now();
+            renderTime();
+          }, 1000);
+          setInterval(() => {
+            refreshPorts();
+          }, 600);
+        }
+        async function initPorts() {
+          await refreshPorts();
+          if (app.ports.length && !app.isConnected)
+            await conn(null, "检测到已接入USB设备，已自动开启连接");
+        }
+        function setup() {
+          app.hexSend = false;
+          app.hexShow = true;
+          app.timed = false;
+          app.lineMode = 0;
+          app.sendInput = "";
+          el.hexSendEnabled.checked = false;
+          el.hexDisplayEnabled.checked = true;
+          el.timedSendEnabled.checked = false;
+          el.timedIntervalText.disabled = true;
+          el.sendInput.value = "";
+          el.sendInput.placeholder = "发送区（文本）";
+          app.testVal = String(TEST_OPTS[0].def);
+          renderTestUi();
+        }
+        function renderBanner() {
+          if (!secure()) {
+            el.secureBanner.textContent =
+              "注意：Web Serial API 需要 HTTPS 或 localhost。请将页面部署到 HTTPS 环境后使用。";
+            el.secureBanner.classList.add("show");
+          } else {
+            el.secureBanner.classList.remove("show");
+            el.secureBanner.textContent = "";
+          }
+        }
+
+        async function init() {
+          renderBanner();
+          bind();
+          periodic();
+          setup();
+          if (!app.supported)
+            toast("当前浏览器不支持 Web Serial API，请使用新版 Chrome / Edge");
+          render();
+          await initPorts();
+          render();
+        }
+        init();
+      })();
+    </script>
+  </body>
 </html>
