@@ -727,8 +727,17 @@
       }
       .checks {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
+      }
+      .timed-inline {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 120px;
+        gap: 8px;
+        align-items: center;
+      }
+      .timed-inline .check {
+        white-space: nowrap;
       }
       .line-ending-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -746,11 +755,17 @@
         accent-color: var(--neon);
         margin: 0;
       }
-      .intv {
+      .line-row {
         display: grid;
-        grid-template-columns: 0.9fr 1.1fr;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         gap: 8px;
         align-items: center;
+      }
+      .line-field {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
       }
       input,
       select,
@@ -773,14 +788,14 @@
         box-shadow: 0 0 0 3px rgba(142, 197, 255, 0.2);
       }
       .send {
-        min-height: 72px;
+        min-height: 124px;
         resize: vertical;
         font-family: "JetBrains Mono", Consolas, monospace;
         font-size: 12px;
       }
       .acts {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
       }
       .gb {
@@ -1033,11 +1048,13 @@
         .cg.four {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
-        .checks,
         .acts {
           grid-template-columns: 1fr;
         }
-        .intv {
+        .timed-inline {
+          grid-template-columns: 1fr;
+        }
+        .line-row {
           grid-template-columns: 1fr;
         }
       }
@@ -1376,30 +1393,47 @@
                     >HEX显示</span
                   ></label
                 >
+                <div class="timed-inline">
+                  <label class="check"
+                    ><input id="timedSendEnabled" type="checkbox" /><span
+                      >定时发送</span
+                    ></label
+                  >
+                  <input
+                    id="timedIntervalText"
+                    class="f"
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="5"
+                    placeholder="发送间隔(ms)"
+                    value="1000"
+                    disabled
+                  />
+                </div>
               </div>
-              <div class="intv">
-                <label class="check"
-                  ><input id="timedSendEnabled" type="checkbox" /><span
-                    >定时发送</span
-                  ></label
-                >
-                <input
-                  id="timedIntervalText"
-                  class="f"
-                  type="text"
-                  inputmode="numeric"
-                  maxlength="5"
-                  placeholder="发送间隔(ms)"
-                  value="1000"
-                  disabled
-                />
+              <div class="line-row">
+                <div class="line-field">
+                  <div class="stitle">超时时间(ms)</div>
+                  <input
+                    id="frameTimeoutText"
+                    class="f"
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="4"
+                    placeholder="超时时间(ms)"
+                    value="20"
+                    aria-label="接收分帧超时时间(毫秒)"
+                  />
+                </div>
+                <div class="line-field">
+                  <div class="stitle">发送附加换行</div>
+                  <select id="lineEndingSelect" class="f">
+                    <option value="0">无</option>
+                    <option value="1">\n</option>
+                    <option value="2">\r\n</option>
+                  </select>
+                </div>
               </div>
-              <div class="stitle">发送附加换行</div>
-              <select id="lineEndingSelect" class="f">
-                <option value="0">无</option>
-                <option value="1">\n</option>
-                <option value="2">\r\n</option>
-              </select>
             </div>
             <div class="sbox">
               <textarea
@@ -1408,6 +1442,9 @@
                 placeholder="发送区（文本）"
               ></textarea>
               <div class="acts">
+                <button id="saveDevLogBtn" class="gb c1" type="button">
+                  日志保存
+                </button>
                 <button id="clearDevBtn" class="gb c2" type="button">清空</button>
                 <button id="sendDevBtn" class="gb c3" type="button">发送</button>
               </div>
@@ -1724,6 +1761,12 @@
           hexShow: true,
           timed: false,
           timedText: "1000",
+          frameTimeoutText: "20",
+          frameTimeoutMs: 20,
+          rxFrameParts: [],
+          rxFrameLen: 0,
+          rxFrameLastTs: 0,
+          rxFrameTimer: null,
           lineMode: 0,
           sendInput: "",
           tx: 0,
@@ -1805,8 +1848,10 @@
           hexDisplayEnabled: gid("hexDisplayEnabled"),
           timedSendEnabled: gid("timedSendEnabled"),
           timedIntervalText: gid("timedIntervalText"),
+          frameTimeoutText: gid("frameTimeoutText"),
           lineEndingSelect: gid("lineEndingSelect"),
           sendInput: gid("sendInput"),
+          saveDevLogBtn: gid("saveDevLogBtn"),
           clearDevBtn: gid("clearDevBtn"),
           sendDevBtn: gid("sendDevBtn"),
           byteCounter: gid("byteCounter"),
@@ -1911,6 +1956,10 @@
         const fTime = (ms) => {
           const d = new Date(ms);
           return `${d2(d.getHours())}:${d2(d.getMinutes())}:${d2(d.getSeconds())}`;
+        };
+        const fFileStamp = (ms) => {
+          const d = new Date(ms);
+          return `${d.getFullYear()}-${d2(d.getMonth() + 1)}-${d2(d.getDate())} ${d2(d.getHours())}:${d2(d.getMinutes())}:${d2(d.getSeconds())}`;
         };
         const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         const secure = () =>
@@ -2243,6 +2292,105 @@
           else app.rx += cp.length;
           renderCounter();
           renderLogs();
+        }
+        function clearRxFrameTimer() {
+          if (!app.rxFrameTimer) return;
+          clearTimeout(app.rxFrameTimer);
+          app.rxFrameTimer = null;
+        }
+        function frameTimeoutMsFromInput(v, fallback = 20) {
+          const n = Number.parseInt(String(v || ""), 10);
+          const base = Number.isFinite(n) ? n : fallback;
+          return Math.max(1, Math.min(5000, base));
+        }
+        function flushRxFrame() {
+          clearRxFrameTimer();
+          if (!app.rxFrameLen) return;
+          const out = new Uint8Array(app.rxFrameLen);
+          let off = 0;
+          app.rxFrameParts.forEach((part) => {
+            out.set(part, off);
+            off += part.length;
+          });
+          app.rxFrameParts = [];
+          app.rxFrameLen = 0;
+          app.rxFrameLastTs = 0;
+          addLog("接收", out);
+        }
+        function resetRxFrame(discard = true) {
+          clearRxFrameTimer();
+          if (!discard && app.rxFrameLen) flushRxFrame();
+          app.rxFrameParts = [];
+          app.rxFrameLen = 0;
+          app.rxFrameLastTs = 0;
+        }
+        function pushRxFrameChunk(chunk) {
+          const cp = chunk instanceof Uint8Array ? chunk.slice() : new Uint8Array(chunk);
+          if (!cp.length) return;
+          const now = Date.now();
+          if (
+            app.rxFrameLen &&
+            now - app.rxFrameLastTs > Math.max(1, app.frameTimeoutMs)
+          ) {
+            flushRxFrame();
+          }
+          app.rxFrameParts.push(cp);
+          app.rxFrameLen += cp.length;
+          app.rxFrameLastTs = now;
+          clearRxFrameTimer();
+          app.rxFrameTimer = setTimeout(() => {
+            flushRxFrame();
+          }, Math.max(1, app.frameTimeoutMs));
+        }
+        function syncFrameTimeoutInput(commit = false) {
+          if (!el.frameTimeoutText) return;
+          let raw = String(el.frameTimeoutText.value || "")
+            .replace(/\D+/g, "")
+            .slice(0, 4);
+          if (!raw) {
+            if (!commit) return;
+            raw = String(app.frameTimeoutMs || 20);
+          }
+          const ms = frameTimeoutMsFromInput(raw, app.frameTimeoutMs || 20);
+          app.frameTimeoutMs = ms;
+          app.frameTimeoutText = String(ms);
+          el.frameTimeoutText.value = String(ms);
+          if (app.rxFrameLen) {
+            clearRxFrameTimer();
+            app.rxFrameTimer = setTimeout(() => {
+              flushRxFrame();
+            }, app.frameTimeoutMs);
+          }
+        }
+        function exportDevLogs() {
+          if (!app.logs.length) {
+            toast("暂无透传数据可保存");
+            return;
+          }
+          const now = Date.now();
+          const fileName = `${fFileStamp(now)}.txt`;
+          const content = app.logs
+            .map((l) => {
+              const time = `${fDate(l.ts)} ${fTime(l.ts)}`;
+              const hexText = hex(l.p);
+              const plainText = txt(l.p)
+                .replace(/\r/g, "\\r")
+                .replace(/\n/g, "\\n");
+              return `[${time}] [${l.dir}]\r\nHEX: ${hexText}\r\nTEXT: ${plainText}`;
+            })
+            .join("\r\n\r\n");
+          const blob = new Blob(["\uFEFF", content], {
+            type: "text/plain;charset=utf-8",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          toast(`日志已保存：${fileName}`);
         }
         function curLine() {
           const v = Number(el.lineEndingSelect?.value ?? "0");
@@ -2909,6 +3057,7 @@
           app.pendingPort = [];
           app.bufData = [];
           app.bufTest = [];
+          resetRxFrame(true);
           render();
         }
         async function readLoop() {
@@ -2922,7 +3071,7 @@
               if (value && value.length) {
                 const c =
                   value instanceof Uint8Array ? value : new Uint8Array(value);
-                addLog("接收", c);
+                pushRxFrameChunk(c);
                 feedTest(c);
                 feedData(c);
               }
@@ -2936,6 +3085,7 @@
                 app.reader.releaseLock();
               } catch (_) {}
             }
+            flushRxFrame();
             app.reader = null;
           }
         }
@@ -2987,6 +3137,7 @@
         }
         async function cleanup(reset) {
           app.readActive = false;
+          flushRxFrame();
           stopPoll();
           stopTimed();
           clearRtcSyncWait();
@@ -3459,6 +3610,14 @@
             app.timedText = el.timedIntervalText.value || "1000";
             if (app.timed) restartTimed();
           };
+          if (el.frameTimeoutText) {
+            el.frameTimeoutText.oninput = () => {
+              const v = el.frameTimeoutText.value.replace(/\D+/g, "").slice(0, 4);
+              el.frameTimeoutText.value = v;
+              if (v) syncFrameTimeoutInput(false);
+            };
+            el.frameTimeoutText.onblur = () => syncFrameTimeoutInput(true);
+          }
           if (el.lineEndingSelect) {
             el.lineEndingSelect.value = String(app.lineMode);
             el.lineEndingSelect.onchange = () => {
@@ -3474,7 +3633,9 @@
               sendNow(true);
             }
           };
+          el.saveDevLogBtn.onclick = () => exportDevLogs();
           el.clearDevBtn.onclick = () => {
+            resetRxFrame(true);
             app.logs = [];
             app.tx = 0;
             app.rx = 0;
@@ -3591,14 +3752,20 @@
           app.hexSend = false;
           app.hexShow = true;
           app.timed = false;
+          app.timedText = "1000";
+          app.frameTimeoutMs = 20;
+          app.frameTimeoutText = "20";
           app.lineMode = 0;
           app.sendInput = "";
           el.hexSendEnabled.checked = false;
           el.hexDisplayEnabled.checked = true;
           el.timedSendEnabled.checked = false;
           el.timedIntervalText.disabled = true;
+          el.timedIntervalText.value = app.timedText;
+          if (el.frameTimeoutText) el.frameTimeoutText.value = app.frameTimeoutText;
           el.sendInput.value = "";
           el.sendInput.placeholder = "发送区（文本）";
+          resetRxFrame(true);
           app.testVal = String(TEST_OPTS[0].def);
           renderTestUi();
         }
