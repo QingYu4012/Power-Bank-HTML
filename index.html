@@ -518,9 +518,9 @@
       }
       .hs {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(88px, 1fr) auto;
+        grid-template-columns: max-content minmax(0, 1fr);
         align-items: center;
-        gap: 12px;
+        gap: 10px;
         font-size: 15px;
         line-height: 1.45;
         color: var(--neon);
@@ -1729,6 +1729,19 @@
               { v: 210, l: "210" },
             ],
           },
+          {
+            id: 2,
+            label: "UsedMonths已使用月份",
+            min: 0,
+            max: 65535,
+            def: 0,
+            unit: "",
+            quick: [
+              { v: 12, l: "12" },
+              { v: 24, l: "24" },
+              { v: 36, l: "36" },
+            ],
+          },
         ];
 
         const app = {
@@ -1744,8 +1757,6 @@
           readActive: false,
           writeQ: Promise.resolve(),
           isConnected: false,
-          pendingData: [],
-          pendingPort: [],
           pendingStatic: new Set(STATIC_TYPES),
           bufData: [],
           bufTest: [],
@@ -1793,9 +1804,9 @@
           phoneTimer: null,
           dataToken: 0,
           portToken: 0,
+          portFrameExpect: 0,
+          portFrameLastTs: 0,
           timedTimer: null,
-          rtcSyncWaiting: false,
-          rtcSyncWaitTimer: null,
         };
         app.bat = defBat();
         app.portsInfo = defPorts();
@@ -2012,13 +2023,6 @@
         function selectedName() {
           return portLabel(app.selPort);
         }
-        function clearRtcSyncWait() {
-          if (app.rtcSyncWaitTimer) {
-            clearTimeout(app.rtcSyncWaitTimer);
-            app.rtcSyncWaitTimer = null;
-          }
-          app.rtcSyncWaiting = false;
-        }
         function canForget(port) {
           return !!port && typeof port.forget === "function";
         }
@@ -2027,7 +2031,7 @@
           const toForget = app.ports.filter((p) => p && p !== keepPort);
           if (!toForget.length) return false;
           if (app.activePort && toForget.includes(app.activePort))
-            await disconn("切换端口，已断开旧连接", false);
+            await disconn("切换端口，已断开旧连接");
           let forgot = false,
             forgetCapable = false;
           for (const p of toForget) {
@@ -2183,10 +2187,13 @@
           el.portInfoList.innerHTML = "";
           arr.forEach((p, i) => {
             const disabled = p.enableKnown && !p.portEnabled,
-              base = disabled || !p.hasData,
               raw = outState(p.stableOutputState),
-              none = !base && raw === "NONE",
-              ph = base || none,
+              allowData =
+                p.enableKnown &&
+                p.portEnabled &&
+                p.hasData &&
+                raw !== "NONE",
+              ph = !allowData,
               txt = (v) => (ph ? "---" : v),
               num = (v) => (ph ? "---" : String(v)),
               canPower = !ph && p.mosVoltageRefreshed && p.portCurrentRefreshed,
@@ -2213,7 +2220,7 @@
               sc =
                 p.lastErrorCode != null
                   ? "#ffb7c4"
-                  : disabled || !p.hasData
+                  : !allowData
                     ? "var(--muted)"
                     : "var(--neon)",
               st =
@@ -2221,14 +2228,14 @@
                   ? protErr(p.lastErrorCode)
                   : disabled
                     ? "未使能"
-                    : p.hasData
+                    : allowData
                       ? "已更新"
                       : "未刷新";
             const card = document.createElement("div");
             card.className = "pc";
             const roleInfo = `<div class="tiny tiny-role"><div><span class="tk">电源角色：</span><span class="tv">${stable}</span></div><div><span class="tk">数据角色：</span><span class="tv">${role}</span></div></div>`;
             const negotiInfo = `<div class="tiny tiny-metric"><div><span class="tk">协商电压:</span><span class="tv">${num(p.negotiatedVoltageMv)}</span><span class="tu">mV</span></div><div><span class="tk">协商电流:</span><span class="tv">${num(p.negotiatedCurrentMa)}</span><span class="tu">mA</span></div></div>`;
-            card.innerHTML = `<div class="ph"><div class="pt">端口${p.portId}</div><div class="ps" style="color:${sc}">${st}</div></div>${roleInfo}<div class="psub"><div class="hs" style="color:${hi ? "var(--ok)" : "var(--neon)"}"><div style="display:flex;align-items:center;gap:4px"><span class="bolt ${hi ? "on" : ""}">⚡</span><span>握手协议:</span></div><div style="text-align:center">${hTxt}</div><div></div></div></div><div class="psub">${negotiInfo}<div class="line" style="opacity:.2;margin:0"></div><div class="kv"><div class="k">当前电压:</div><div class="v">${num(p.mosVoltageMv)}</div><div class="u">mV</div></div><div class="kv"><div class="k">当前电流:</div><div class="v">${num(p.portCurrentMa)}</div><div class="u">mA</div></div><div class="kv"><div class="k">当前功率:</div><div class="v">${pwr}</div><div class="u">mW</div></div></div>`;
+            card.innerHTML = `<div class="ph"><div class="pt">端口${p.portId}</div><div class="ps" style="color:${sc}">${st}</div></div>${roleInfo}<div class="psub"><div class="hs" style="color:${hi ? "var(--ok)" : "var(--neon)"}"><div style="display:flex;align-items:center;gap:4px"><span class="bolt ${hi ? "on" : ""}">⚡</span><span>握手协议:</span></div><div style="text-align:center">${hTxt}</div></div></div><div class="psub">${negotiInfo}<div class="line" style="opacity:.2;margin:0"></div><div class="kv"><div class="k">当前电压:</div><div class="v">${num(p.mosVoltageMv)}</div><div class="u">mV</div></div><div class="kv"><div class="k">当前电流:</div><div class="v">${num(p.portCurrentMa)}</div><div class="u">mA</div></div><div class="kv"><div class="k">当前功率:</div><div class="v">${pwr}</div><div class="u">mW</div></div></div>`;
             el.portInfoList.appendChild(card);
           });
         }
@@ -2538,6 +2545,11 @@
             : s;
         }
         const m2u = (m) => (Number(m) / 1000).toFixed(2);
+        const minText = (raw) => {
+          const v = leInt((raw || new Uint8Array()).slice(0, 2), false);
+          if (v == null || v === 0xffff || v > 60000) return null;
+          return String(v);
+        };
         const d2u = (v) => {
           const n = Number(v) || 0,
             sg = n < 0 ? "-" : "",
@@ -2662,7 +2674,7 @@
           }
           return best;
         }
-        function decodePort(raw, req) {
+        function decodePort(raw) {
           if (!raw || raw.length < 15) return null;
           const mask = raw[0] & 255,
             off = 1,
@@ -2670,8 +2682,9 @@
             b1 = raw[off + 1] & 255,
             r16 = (i) => (raw[off + i] & 255) | ((raw[off + i + 1] & 255) << 8),
             fb = (b0 >> 5) & 0x03,
-            t = req != null && req >= 0 && req < PORT_COUNT ? req : fb,
-            en = ((mask >> t) & 1) === 1;
+            t = fb >= 0 && fb < PORT_COUNT ? fb : null;
+          if (t == null) return null;
+          const en = ((mask >> t) & 1) === 1;
           if (!en)
             return {
               portId: t,
@@ -2705,20 +2718,13 @@
             protectionFlags: raw[off + 13] & 255,
           };
         }
-        const popData = () =>
-            app.pendingData.length ? app.pendingData.shift() : null,
-          popPort = () =>
-            app.pendingPort.length ? app.pendingPort.shift() : null;
-        function enqData(t) {
-          const i = app.pendingData.indexOf(t);
-          if (i >= 0) app.pendingData.splice(i, 1);
-          app.pendingData.push(t);
-        }
-        function enqPort(p) {
-          const v = Math.max(0, Math.min(PORT_COUNT - 1, Number(p) || 0)),
-            i = app.pendingPort.indexOf(v);
-          if (i >= 0) app.pendingPort.splice(i, 1);
-          app.pendingPort.push(v);
+        function nextExpectedPortFrame() {
+          const now = Date.now();
+          if (now - app.portFrameLastTs > 120) app.portFrameExpect = 0;
+          const t = app.portFrameExpect;
+          app.portFrameExpect = (app.portFrameExpect + 1) % PORT_COUNT;
+          app.portFrameLastTs = now;
+          return t;
         }
         function onDataFrame(rawCmd, p) {
           const cmd = rawCmd & 0x7f;
@@ -2728,19 +2734,13 @@
               app.pbMs = d;
               renderTime();
             }
-            if (app.rtcSyncWaiting) {
-              clearRtcSyncWait();
-              toast("RTC同步成功");
-            }
             return;
           }
           if (cmd === CMD_DATA) {
-            const fb = popData(),
-              dt = p.length >= 2 ? p[0] & 255 : null,
-              has = dt != null && dt >= 0 && dt <= DT_MAX,
-              t = has ? dt : fb;
-            if (t == null) return;
-            const vr = has ? p.slice(1) : p,
+            if (!p || p.length < 2) return;
+            const t = p[0] & 255;
+            if (t < 0 || t > DT_MAX) return;
+            const vr = p.slice(1),
               vu = leInt(vr, false),
               d = app.bat;
             switch (t) {
@@ -2780,12 +2780,30 @@
                 app.pendingStatic.delete(DT_DC);
                 break;
               case DT_TTE:
-                if (vu == null) return;
-                app.bat = { ...d, estimateDischargeMinutes: String(vu) };
+                if (app.status !== 2) {
+                  app.bat = { ...d, estimateDischargeMinutes: "---" };
+                  break;
+                }
+                {
+                  const mv = minText(vr);
+                  app.bat = {
+                    ...d,
+                    estimateDischargeMinutes: mv == null ? "---" : mv,
+                  };
+                }
                 break;
               case DT_TTF:
-                if (vu == null) return;
-                app.bat = { ...d, estimateChargeMinutes: String(vu) };
+                if (app.status !== 1) {
+                  app.bat = { ...d, estimateChargeMinutes: "---" };
+                  break;
+                }
+                {
+                  const mv = minText(vr);
+                  app.bat = {
+                    ...d,
+                    estimateChargeMinutes: mv == null ? "---" : mv,
+                  };
+                }
                 break;
               case DT_CYCLE:
                 if (vu == null) return;
@@ -2826,7 +2844,20 @@
                 if (vu == null) return;
                 {
                   const m = vu === 0 ? 0 : vu === 1 ? 2 : vu === 2 ? 1 : null;
-                  if (m != null) app.status = m;
+                  if (m != null) {
+                    app.status = m;
+                    if (m === 0) {
+                      app.bat = {
+                        ...d,
+                        estimateChargeMinutes: "---",
+                        estimateDischargeMinutes: "---",
+                      };
+                    } else if (m === 1) {
+                      app.bat = { ...d, estimateDischargeMinutes: "---" };
+                    } else if (m === 2) {
+                      app.bat = { ...d, estimateChargeMinutes: "---" };
+                    }
+                  }
                 }
                 break;
               default:
@@ -2837,24 +2868,12 @@
             return;
           }
           if (cmd === CMD_PORT) {
-            const req = popPort();
-            if (p.length === 1) {
-              const e = p[0] & 255;
-              if (req != null) {
-                const old = app.portsInfo.get(req) || {};
-                app.portsInfo.set(req, {
-                  ...old,
-                  hasData: false,
-                  lastErrorCode: e,
-                  mosVoltageRefreshed: false,
-                  portCurrentRefreshed: false,
-                });
-                renderPorts();
-              }
-              return;
-            }
-            const dec = decodePort(p, req);
+            const dec = decodePort(p);
             if (!dec) return;
+            if (!app.dev) {
+              const exp = nextExpectedPortFrame();
+              if (dec.feedbackPortId !== exp) return;
+            }
             const t = dec.portId,
               old = app.portsInfo.get(t) || {};
             app.portsInfo.set(t, {
@@ -2895,7 +2914,7 @@
             const pid = p[0] & 255;
             if (pid === 0x00) {
               if (p.length >= 2) applyTestVal(pid, p[1] & 255, "设备回复");
-            } else if (pid === 0x01) {
+            } else if (pid === 0x01 || pid === 0x02) {
               if (p.length >= 3)
                 applyTestVal(
                   pid,
@@ -3005,7 +3024,7 @@
             return true;
           } catch (_) {
             if (tip) toast("发送失败，请检查设备连接");
-            await disconn("透传通道已断开，请重新连接", false);
+            await disconn("透传通道已断开，请重新连接");
             return false;
           }
         }
@@ -3013,12 +3032,7 @@
           const p = pkt(cmd, data);
           return sendRaw(p, true, `${name} 已发送(${p.length}字节)`, true);
         }
-        async function sendData(
-          cmd,
-          data = new Uint8Array(),
-          ed = null,
-          ep = null,
-        ) {
+        async function sendData(cmd, data = new Uint8Array()) {
           if (!app.isConnected || !app.writer) return false;
           const p = pkt(cmd, data);
           try {
@@ -3028,11 +3042,9 @@
               await qwrite(p.slice(off, end), true);
               off = end;
             }
-            if (ed != null) enqData(ed);
-            if (ep != null) enqPort(ep);
             return true;
           } catch (_) {
-            await disconn("透传通道已断开，请重新连接", false);
+            await disconn("透传通道已断开，请重新连接");
             return false;
           }
         }
@@ -3053,10 +3065,10 @@
           app.bat = defBat();
           app.pendingStatic = new Set(STATIC_TYPES);
           app.portsInfo = defPorts();
-          app.pendingData = [];
-          app.pendingPort = [];
           app.bufData = [];
           app.bufTest = [];
+          app.portFrameExpect = 0;
+          app.portFrameLastTs = 0;
           resetRxFrame(true);
           render();
         }
@@ -3078,7 +3090,7 @@
             }
           } catch (_) {
             if (app.readActive)
-              await disconn("透传通道已断开，请重新连接", false);
+              await disconn("透传通道已断开，请重新连接");
           } finally {
             if (app.reader) {
               try {
@@ -3140,7 +3152,6 @@
           flushRxFrame();
           stopPoll();
           stopTimed();
-          clearRtcSyncWait();
           if (app.reader) {
             try {
               await app.reader.cancel();
@@ -3199,6 +3210,8 @@
         function startPoll() {
           stopPoll();
           if (!app.isConnected || app.dev) return;
+          app.portFrameExpect = 0;
+          app.portFrameLastTs = 0;
           const dt = ++app.dataToken,
             pt = ++app.portToken;
           (async () => {
@@ -3214,7 +3227,7 @@
               for (let i = 0; i < types.length; i++) {
                 await sleep(i === 0 ? 5 : 3);
                 const t = types[i];
-                await sendData(CMD_DATA, new Uint8Array([t & 255]), t, null);
+                await sendData(CMD_DATA, new Uint8Array([t & 255]));
               }
               await sleep(Math.max(0, 1000 - (Date.now() - st)));
             }
@@ -3224,7 +3237,7 @@
               const st = Date.now();
               for (let p = 0; p < PORT_COUNT; p++) {
                 if (p > 0) await sleep(5);
-                await sendData(CMD_PORT, new Uint8Array([p & 255]), null, p);
+                await sendData(CMD_PORT, new Uint8Array([p & 255]));
               }
               await sleep(Math.max(0, 400 - (Date.now() - st)));
             }
@@ -3367,7 +3380,7 @@
           closeCfg();
           updConnUI();
           if (app.isConnected)
-            await disconn("连接参数已更新，请重新连接", false);
+            await disconn("连接参数已更新，请重新连接");
         }
         function devMode(on) {
           app.dev = on;
@@ -3532,25 +3545,13 @@
             toast("透传未就绪，RTC同步失败");
             return;
           }
-          if (app.rtcSyncWaiting) {
-            toast("RTC同步进行中，请稍候");
-            return;
-          }
           const sent = await sendData(CMD_SET_RTC, setRtcUnix());
           if (!sent) {
             toast("发送 SET_RTC 失败");
             return;
           }
-          clearRtcSyncWait();
-          app.rtcSyncWaiting = true;
-          app.rtcSyncWaitTimer = setTimeout(() => {
-            if (!app.rtcSyncWaiting) return;
-            clearRtcSyncWait();
-            toast("RTC同步超时，请重试");
-          }, 5000);
           const reqSent = await sendData(CMD_RTC, new Uint8Array([0x01]));
           if (!reqSent) {
-            clearRtcSyncWait();
             toast("发送 GET_RTC 失败");
             return;
           }
