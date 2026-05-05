@@ -228,3 +228,20 @@
    - 未选择文件时提示 `文件未选择`。
    - 新增 `测试演示` 按钮，可自动生成测试 `.bin` 文件并运行完整下载进度效果。
    - 当前阶段下载命令发送、每秒获取选项字节真实发送、下载进度与设备交互细节暂未接入，先用于界面和流程验证。
+
+## 2026-05-05 V1.2
+1. IAP 通讯从演示流程改为真实 `AA 55` 协议帧：
+   - 命令帧格式为 `Header0(0xAA) + Header1(0x55) + CMD + Len(LE) + Data + CRC8`，单包 `Data` 限制为 `Len <= 32`。
+   - 进入更新程序界面后先每 `1000ms` 发送 `IAP_CMD_GET_ACK (0x00)`，收到正常响应后再轮询 `IAP_CMD_GET_OPTION_BYTES (0x01)`。
+   - `GET_OPTION_BYTES` 按 20 字节 option bytes 解析：`APP_Key`、`BOOT_State`、`APP_SIZE`、`APP_CRC32`、`OB_CRC32`，界面新增 `BOOT_State` 显示。
+2. 新增 `IAP_CMD_SET_BOOT_STATE (0x02)` 下载前状态切换流程：
+   - 当设备处于 `BOOT_STATE_APP` 时先切换到 `BOOT_STATE_APP_REQUEST_UPGRAD`。
+   - 下载前切换到 `BOOT_STATE_APP_UPDATA`，每次设置后都会重新读取 option bytes 确认状态。
+3. 完成 Xmodem 实际下载流程：
+   - 支持 `Xmodem - 128` / `Xmodem - 1K`，按设备端 `xmodem.c` 生成 `SOH/STX + Packet Number + ~Packet Number + Data + 校验` 数据包。
+   - 支持 `和校验` 与 `CRC-16校验`；CRC-16 使用设备说明中的 CCITT `0x1021`、初值 `0x0000` 计算。
+   - 等待设备发送 `NAK(0x15)` 或字符 `C` 后发送第一包；收到 `ACK` 后延时 `500ms` 发送下一包；收到 `NAK` 或 `5s` 超时会重发，连续失败超过限制后提示下载失败。
+   - 文件发送完成后发送 `EOT(0x04)`，并尝试重新读取 option bytes，对比本地 `APP_SIZE / APP_CRC32` 与设备返回值。
+4. `Ymodem - 128` / `Ymodem - 1K` 不接入 IAP 实际协议：
+   - 用户选择 Ymodem 后点击 `下载` 时只执行测试程序，不向设备发送 IAP / Xmodem 数据。
+   - `测试演示` 按钮始终走测试程序，可用于验证文件信息、进度条和剩余字节显示。
