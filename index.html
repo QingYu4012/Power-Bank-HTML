@@ -671,6 +671,102 @@
         margin-top: 2px;
         margin-bottom: 4px;
       }
+      .iap {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        border-radius: 20px;
+        border: 1.8px solid rgba(142, 197, 255, 0.9);
+        background: var(--card);
+        padding: 14px;
+        box-shadow: var(--shadow);
+        min-height: 0;
+      }
+      .iap-main {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+        gap: 12px;
+      }
+      .iap-panel {
+        border-radius: 12px;
+        border: 1px solid rgba(142, 197, 255, 0.22);
+        background: linear-gradient(180deg, var(--sub), rgba(17, 42, 74, 0.66));
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+      }
+      .iap-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .iap-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .iap-actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .iap-file {
+        display: none;
+      }
+      .iap-progress {
+        width: 100%;
+        height: 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(142, 197, 255, 0.36);
+        background: rgba(10, 29, 55, 0.72);
+        overflow: hidden;
+      }
+      .iap-progress > span {
+        display: block;
+        height: 100%;
+        width: var(--p, 0%);
+        border-radius: inherit;
+        background: linear-gradient(90deg, #62f7a2, #8ec5ff);
+        transition: width 0.18s ease;
+      }
+      .iap-log {
+        min-height: 160px;
+        max-height: 260px;
+        overflow: auto;
+        border-radius: 10px;
+        border: 1px solid rgba(142, 197, 255, 0.2);
+        background: rgba(9, 27, 52, 0.55);
+        padding: 10px;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 11px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        color: var(--muted);
+      }
+      .iap-kv {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
+        color: var(--neon);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .iap-kv > span:last-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
       .dt {
         display: flex;
         justify-content: space-between;
@@ -1065,6 +1161,9 @@
         .dev-main {
           grid-template-columns: 1fr;
         }
+        .iap-main {
+          grid-template-columns: 1fr;
+        }
         .dev-cmd {
           max-height: 420px;
         }
@@ -1136,6 +1235,10 @@
         }
         #testQuickGrid.quick-2,
         #testQuickGrid.quick-3 {
+          grid-template-columns: 1fr;
+        }
+        .iap-grid,
+        .iap-actions {
           grid-template-columns: 1fr;
         }
         .m {
@@ -1538,9 +1641,86 @@
                     发送测试数据
                   </button>
                 </div>
+                <button id="openIapBtn" class="b full" type="button">
+                  更新程序
+                </button>
               </div>
             </div>
           </section>
+        </div>
+      </section>
+
+      <section id="iapView" class="view iap" style="display: none">
+        <div class="dt">
+          <div class="dtl">更新程序</div>
+          <div class="dtr">
+            <div id="iapStateText" class="ready">等待读取 option bytes</div>
+            <button id="iapBackDataBtn" class="ob" type="button">
+              返回数据界面
+            </button>
+            <button id="iapBackDevBtn" class="ob" type="button">
+              返回开发者模式
+            </button>
+          </div>
+        </div>
+        <div class="iap-main">
+          <div class="iap-panel">
+            <div class="dtit">下载配置</div>
+            <div class="iap-grid">
+              <div class="iap-field">
+                <div class="stitle">传输协议</div>
+                <select id="iapProtocolSelect" class="f">
+                  <option value="xmodem-128">Xmodem - 128</option>
+                  <option value="xmodem-1k" selected>Xmodem - 1K</option>
+                  <option value="ymodem-128">Ymodem - 128</option>
+                  <option value="ymodem-1k">Ymodem - 1K</option>
+                </select>
+              </div>
+              <div class="iap-field">
+                <div class="stitle">校验模式</div>
+                <select id="iapCheckSelect" class="f">
+                  <option value="sum">和校验</option>
+                  <option value="crc16" selected>CRC-16校验</option>
+                </select>
+              </div>
+            </div>
+            <input id="iapFileInput" class="iap-file" type="file" accept=".bin" />
+            <div class="iap-actions">
+              <button id="iapChooseFileBtn" class="b ghost" type="button">
+                选择文件
+              </button>
+              <button id="iapDownloadBtn" class="b" type="button">下载</button>
+              <button id="iapDemoBtn" class="b ghost" type="button">
+                测试演示
+              </button>
+            </div>
+            <div class="iap-grid">
+              <div class="iap-panel" style="padding: 10px">
+                <div class="stitle">文件信息</div>
+                <div class="iap-kv"><span>目录</span><span id="iapFileDir">---</span></div>
+                <div class="iap-kv"><span>文件名</span><span id="iapFileName">---</span></div>
+                <div class="iap-kv"><span>原始大小</span><span id="iapFileRawSize">---</span></div>
+                <div class="iap-kv"><span>传输大小</span><span id="iapFileTxSize">---</span></div>
+                <div class="iap-kv"><span>CRC-32</span><span id="iapFileCrc32">---</span></div>
+              </div>
+              <div class="iap-panel" style="padding: 10px">
+                <div class="stitle">Option Bytes</div>
+                <div class="iap-kv"><span>APP_SIZE</span><span id="iapAppSize">---</span></div>
+                <div class="iap-kv"><span>APP_CRC32</span><span id="iapAppCrc32">---</span></div>
+                <div class="iap-kv"><span>读取次数</span><span id="iapOptionAttempts">0</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="iap-panel">
+            <div class="dtit">下载状态</div>
+            <div class="iap-progress" aria-label="下载进度">
+              <span id="iapProgressBar"></span>
+            </div>
+            <div class="iap-kv"><span>进度</span><span id="iapProgressText">0%</span></div>
+            <div class="iap-kv"><span>剩余字节</span><span id="iapRemainBytes">---</span></div>
+            <div class="iap-kv"><span>状态</span><span id="iapDownloadState">未开始</span></div>
+            <div id="iapLog" class="iap-log">暂无 IAP 日志</div>
+          </div>
         </div>
       </section>
     </div>
@@ -1630,7 +1810,8 @@
           CMD_SET_RTC = 0x04,
           CMD_PORT = 0x05,
           CMD_GET_TEST = 0x06,
-          CMD_SET_TEST = 0x07;
+          CMD_SET_TEST = 0x07,
+          IAP_CMD_GET_OPTION_BYTES = 0x08;
         const DT_TEMP = 0,
           DT_VOLT = 1,
           DT_C1 = 2,
@@ -1743,6 +1924,12 @@
             ],
           },
         ];
+        const IAP_PROTOCOLS = {
+          "xmodem-128": { name: "Xmodem - 128", block: 128, xmodem: true },
+          "xmodem-1k": { name: "Xmodem - 1K", block: 1024, xmodem: true },
+          "ymodem-128": { name: "Ymodem - 128", block: 128, xmodem: false },
+          "ymodem-1k": { name: "Ymodem - 1K", block: 1024, xmodem: false },
+        };
 
         const app = {
           supported: "serial" in navigator,
@@ -1766,6 +1953,7 @@
           bat: null,
           portsInfo: null,
           dev: false,
+          iap: false,
           tapCount: 0,
           lastTap: 0,
           hexSend: false,
@@ -1807,6 +1995,21 @@
           portFrameExpect: 0,
           portFrameLastTs: 0,
           timedTimer: null,
+          iapFile: null,
+          iapFileDirText: "",
+          iapFileBytes: null,
+          iapTxBytes: null,
+          iapProtocol: "xmodem-1k",
+          iapCheck: "crc16",
+          iapOptionTimer: null,
+          iapOptionAttempts: 0,
+          iapAppSize: null,
+          iapAppCrc32: null,
+          iapProgress: 0,
+          iapRemainBytes: null,
+          iapDownloadState: "未开始",
+          iapDownloadTimer: null,
+          iapLogs: [],
         };
         app.bat = defBat();
         app.portsInfo = defPorts();
@@ -1898,6 +2101,30 @@
           setTestValueInput: gid("setTestValueInput"),
           sendGetTestBtn: gid("sendGetTestBtn"),
           sendSetTestBtn: gid("sendSetTestBtn"),
+          openIapBtn: gid("openIapBtn"),
+          iapView: gid("iapView"),
+          iapStateText: gid("iapStateText"),
+          iapBackDataBtn: gid("iapBackDataBtn"),
+          iapBackDevBtn: gid("iapBackDevBtn"),
+          iapProtocolSelect: gid("iapProtocolSelect"),
+          iapCheckSelect: gid("iapCheckSelect"),
+          iapFileInput: gid("iapFileInput"),
+          iapChooseFileBtn: gid("iapChooseFileBtn"),
+          iapDownloadBtn: gid("iapDownloadBtn"),
+          iapDemoBtn: gid("iapDemoBtn"),
+          iapFileDir: gid("iapFileDir"),
+          iapFileName: gid("iapFileName"),
+          iapFileRawSize: gid("iapFileRawSize"),
+          iapFileTxSize: gid("iapFileTxSize"),
+          iapFileCrc32: gid("iapFileCrc32"),
+          iapAppSize: gid("iapAppSize"),
+          iapAppCrc32: gid("iapAppCrc32"),
+          iapOptionAttempts: gid("iapOptionAttempts"),
+          iapProgressBar: gid("iapProgressBar"),
+          iapProgressText: gid("iapProgressText"),
+          iapRemainBytes: gid("iapRemainBytes"),
+          iapDownloadState: gid("iapDownloadState"),
+          iapLog: gid("iapLog"),
           adminModal: gid("adminModal"),
           adminPasswordInput: gid("adminPasswordInput"),
           toggleAdminPasswordBtn: gid("toggleAdminPasswordBtn"),
@@ -2268,8 +2495,10 @@
           el.devLogBox.scrollTop = el.devLogBox.scrollHeight;
         }
         function renderDev() {
-          el.normalView.style.display = app.dev ? "none" : "flex";
-          el.developerView.style.display = app.dev ? "flex" : "none";
+          el.normalView.style.display = app.dev || app.iap ? "none" : "flex";
+          el.developerView.style.display = app.dev && !app.iap ? "flex" : "none";
+          el.iapView.style.display = app.iap ? "flex" : "none";
+          renderIap();
         }
         function render() {
           updConnUI();
@@ -2279,6 +2508,224 @@
           renderPorts();
           renderCounter();
           renderLogs();
+          renderDev();
+        }
+        function fmtBytes(n) {
+          if (n == null || !Number.isFinite(Number(n))) return "---";
+          const v = Number(n);
+          if (v < 1024) return `${v} B`;
+          if (v < 1024 * 1024) return `${(v / 1024).toFixed(2)} KB`;
+          return `${(v / 1024 / 1024).toFixed(2)} MB`;
+        }
+        function hex32(n) {
+          return `0x${(n >>> 0).toString(16).toUpperCase().padStart(8, "0")}`;
+        }
+        function crc32(bytes) {
+          let crc = 0xffffffff;
+          for (let i = 0; i < bytes.length; i++) {
+            crc ^= bytes[i] & 255;
+            for (let b = 0; b < 8; b++)
+              crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+          }
+          return (crc ^ 0xffffffff) >>> 0;
+        }
+        function iapProtocol() {
+          return IAP_PROTOCOLS[app.iapProtocol] || IAP_PROTOCOLS["xmodem-1k"];
+        }
+        function buildIapTxBytes(src) {
+          const p = iapProtocol();
+          if (!p.xmodem) return src.slice();
+          const size = Math.ceil(src.length / p.block) * p.block || p.block;
+          const out = new Uint8Array(size);
+          out.fill(0x1a);
+          out.set(src, 0);
+          return out;
+        }
+        function addIapLog(msg) {
+          app.iapLogs.push(`[${fTime(Date.now())}] ${msg}`);
+          if (app.iapLogs.length > 80) app.iapLogs = app.iapLogs.slice(-80);
+          renderIap();
+        }
+        function renderIap() {
+          if (!el.iapView) return;
+          const p = Math.max(0, Math.min(100, app.iapProgress || 0));
+          el.iapProtocolSelect.value = app.iapProtocol;
+          el.iapCheckSelect.value = app.iapCheck;
+          el.iapStateText.textContent =
+            app.iapAppSize == null
+              ? "等待读取 option bytes"
+              : "option bytes 已读取";
+          el.iapStateText.classList.toggle("ok", app.iapAppSize != null);
+          el.iapFileDir.textContent = app.iapFile ? app.iapFileDirText : "---";
+          el.iapFileName.textContent = app.iapFile ? app.iapFile.name : "---";
+          el.iapFileRawSize.textContent = app.iapFile
+            ? fmtBytes(app.iapFileBytes?.length ?? app.iapFile.size)
+            : "---";
+          el.iapFileTxSize.textContent = app.iapTxBytes
+            ? fmtBytes(app.iapTxBytes.length)
+            : "---";
+          el.iapFileCrc32.textContent = app.iapTxBytes
+            ? hex32(crc32(app.iapTxBytes))
+            : "---";
+          el.iapAppSize.textContent =
+            app.iapAppSize == null ? "---" : fmtBytes(app.iapAppSize);
+          el.iapAppCrc32.textContent =
+            app.iapAppCrc32 == null ? "---" : hex32(app.iapAppCrc32);
+          el.iapOptionAttempts.textContent = String(app.iapOptionAttempts);
+          el.iapProgressBar.style.setProperty("--p", `${p}%`);
+          el.iapProgressText.textContent = `${Math.round(p)}%`;
+          el.iapRemainBytes.textContent =
+            app.iapRemainBytes == null ? "---" : fmtBytes(app.iapRemainBytes);
+          el.iapDownloadState.textContent = app.iapDownloadState;
+          el.iapLog.textContent = app.iapLogs.length
+            ? app.iapLogs.join("\n")
+            : "暂无 IAP 日志";
+          el.iapLog.scrollTop = el.iapLog.scrollHeight;
+        }
+        function refreshIapFileDerived() {
+          if (!app.iapFileBytes) {
+            app.iapTxBytes = null;
+            renderIap();
+            return;
+          }
+          app.iapTxBytes = buildIapTxBytes(app.iapFileBytes);
+          app.iapRemainBytes = app.iapTxBytes.length;
+          app.iapProgress = 0;
+          app.iapDownloadState = "文件已就绪";
+          renderIap();
+        }
+        function stopIapOptionPoll() {
+          if (!app.iapOptionTimer) return;
+          clearInterval(app.iapOptionTimer);
+          app.iapOptionTimer = null;
+        }
+        function startIapOptionPoll() {
+          stopIapOptionPoll();
+          app.iapOptionAttempts = 0;
+          app.iapAppSize = null;
+          app.iapAppCrc32 = null;
+          addIapLog("进入更新程序界面，开始模拟每秒读取 option bytes");
+          app.iapOptionTimer = setInterval(() => {
+            app.iapOptionAttempts += 1;
+            addIapLog(
+              `IAP_CMD_GET_OPTION_BYTES #${app.iapOptionAttempts}（测试模式未实际发送）`,
+            );
+            if (app.iapOptionAttempts >= 2) {
+              applyIapOptionBytes(256 * 1024, 0x8f4a12c3);
+            }
+          }, 1000);
+          renderIap();
+        }
+        function applyIapOptionBytes(appSize, appCrc32) {
+          app.iapAppSize = appSize >>> 0;
+          app.iapAppCrc32 = appCrc32 >>> 0;
+          stopIapOptionPoll();
+          addIapLog(
+            `设备返回 option bytes：APP_SIZE=${fmtBytes(app.iapAppSize)} APP_CRC32=${hex32(app.iapAppCrc32)}`,
+          );
+        }
+        function onIapFrame(rawCmd, p) {
+          const cmd = rawCmd & 0x7f;
+          if (cmd !== IAP_CMD_GET_OPTION_BYTES || !p || p.length < 8) return;
+          const appSize =
+              (p[0] & 255) |
+              ((p[1] & 255) << 8) |
+              ((p[2] & 255) << 16) |
+              ((p[3] & 255) << 24),
+            appCrc32 =
+              (p[4] & 255) |
+              ((p[5] & 255) << 8) |
+              ((p[6] & 255) << 16) |
+              ((p[7] & 255) << 24);
+          applyIapOptionBytes(appSize, appCrc32);
+        }
+        function stopIapDownload() {
+          if (!app.iapDownloadTimer) return;
+          clearInterval(app.iapDownloadTimer);
+          app.iapDownloadTimer = null;
+        }
+        function iapFileDirectoryText(file) {
+          if (!file) return "";
+          if (typeof file.path === "string" && file.path) {
+            const i = Math.max(file.path.lastIndexOf("\\"), file.path.lastIndexOf("/"));
+            return i >= 0 ? file.path.slice(0, i) : ".";
+          }
+          if (typeof file.webkitRelativePath === "string" && file.webkitRelativePath) {
+            const i = file.webkitRelativePath.lastIndexOf("/");
+            return i >= 0 ? file.webkitRelativePath.slice(0, i) || "." : ".";
+          }
+          return "浏览器安全限制：当前网页环境无法读取真实目录";
+        }
+        async function chooseIapFile(file) {
+          if (!file) return;
+          if (!/\.bin$/i.test(file.name)) {
+            toast("请选择 .bin 文件");
+            return;
+          }
+          app.iapFile = file;
+          app.iapFileDirText = iapFileDirectoryText(file);
+          app.iapFileBytes = new Uint8Array(await file.arrayBuffer());
+          refreshIapFileDerived();
+          addIapLog(
+            `已选择文件 ${file.name}，${iapProtocol().name} 传输大小 ${fmtBytes(app.iapTxBytes.length)}，CRC-32 ${hex32(crc32(app.iapTxBytes))}`,
+          );
+        }
+        function createDemoBin() {
+          const size = 7357;
+          const bytes = new Uint8Array(size);
+          for (let i = 0; i < size; i++) bytes[i] = (i * 31 + 17) & 255;
+          return new File([bytes], "iap-demo.bin", {
+            type: "application/octet-stream",
+            lastModified: Date.now(),
+          });
+        }
+        function startIapDownload() {
+          if (!app.iapTxBytes) {
+            toast("文件未选择");
+            return;
+          }
+          stopIapDownload();
+          const total = app.iapTxBytes.length;
+          let sent = 0;
+          app.iapProgress = 0;
+          app.iapRemainBytes = total;
+          app.iapDownloadState = app.isConnected
+            ? "测试下载中（命令发送暂未接入）"
+            : "测试下载中（未连接设备）";
+          addIapLog(
+            `开始下载测试：${iapProtocol().name} / ${app.iapCheck === "crc16" ? "CRC-16校验" : "和校验"} / ${fmtBytes(total)}`,
+          );
+          app.iapDownloadTimer = setInterval(() => {
+            const step = Math.max(64, Math.ceil(total / 32));
+            sent = Math.min(total, sent + step);
+            app.iapProgress = total ? (sent / total) * 100 : 100;
+            app.iapRemainBytes = Math.max(0, total - sent);
+            if (sent >= total) {
+              stopIapDownload();
+              app.iapDownloadState = "下载完成（测试）";
+              addIapLog("下载完成，进度条和剩余字节已归零");
+              toast("IAP测试下载完成");
+            } else {
+              renderIap();
+            }
+          }, 120);
+          renderIap();
+        }
+        function iapMode(on, backToDev = true) {
+          app.iap = on;
+          if (on) {
+            app.dev = false;
+            stopPoll();
+            startIapOptionPoll();
+            toast("已进入更新程序界面");
+          } else {
+            stopIapOptionPoll();
+            stopIapDownload();
+            app.dev = backToDev;
+            if (backToDev) openCmd();
+            else startPoll();
+            toast(backToDev ? "已返回开发者模式" : "已返回数据界面");
+          }
           renderDev();
         }
         function parseHex(s) {
@@ -2952,7 +3399,10 @@
         function feedData(bytes) {
           if (!bytes || !bytes.length) return;
           bufAdd(app.bufData, bytes);
-          extract(app.bufData).forEach(([c, p]) => onDataFrame(c, p));
+          extract(app.bufData).forEach(([c, p]) => {
+            onIapFrame(c, p);
+            onDataFrame(c, p);
+          });
         }
         function feedTest(bytes) {
           if (!bytes || !bytes.length) return;
@@ -3395,6 +3845,11 @@
             await disconn("连接参数已更新，请重新连接");
         }
         function devMode(on) {
+          if (!on) {
+            stopIapOptionPoll();
+            stopIapDownload();
+          }
+          app.iap = false;
           app.dev = on;
           renderDev();
           if (on) {
@@ -3712,6 +4167,29 @@
               .replace(/\D+/g, "")
               .slice(0, 5);
             app.testVal = el.setTestValueInput.value;
+          };
+          el.openIapBtn.onclick = () => iapMode(true);
+          el.iapBackDataBtn.onclick = () => iapMode(false, false);
+          el.iapBackDevBtn.onclick = () => iapMode(false, true);
+          el.iapProtocolSelect.onchange = () => {
+            app.iapProtocol = el.iapProtocolSelect.value;
+            refreshIapFileDerived();
+            addIapLog(`传输协议已切换为 ${iapProtocol().name}`);
+          };
+          el.iapCheckSelect.onchange = () => {
+            app.iapCheck = el.iapCheckSelect.value;
+            addIapLog(
+              `校验模式已切换为 ${app.iapCheck === "crc16" ? "CRC-16校验" : "和校验"}`,
+            );
+          };
+          el.iapChooseFileBtn.onclick = () => el.iapFileInput.click();
+          el.iapFileInput.onchange = () => {
+            chooseIapFile(el.iapFileInput.files && el.iapFileInput.files[0]);
+          };
+          el.iapDownloadBtn.onclick = () => startIapDownload();
+          el.iapDemoBtn.onclick = async () => {
+            await chooseIapFile(createDemoBin());
+            startIapDownload();
           };
           el.cancelAdminBtn.onclick = closeAdmin;
           el.toggleAdminPasswordBtn.onclick = () => {
