@@ -1671,17 +1671,14 @@
                 <div class="stitle">传输协议</div>
                 <select id="iapProtocolSelect" class="f">
                   <option value="xmodem-128">Xmodem - 128</option>
-                  <option value="xmodem-1k" selected>Xmodem - 1K</option>
+                  <option value="xmodem-1k">Xmodem - 1K</option>
                   <option value="ymodem-128">Ymodem - 128</option>
-                  <option value="ymodem-1k">Ymodem - 1K</option>
+                  <option value="ymodem-1k" selected>Ymodem - 1K</option>
                 </select>
               </div>
               <div class="iap-field">
                 <div class="stitle">校验模式</div>
-                <select id="iapCheckSelect" class="f">
-                  <option value="sum">和校验</option>
-                  <option value="crc16" selected>CRC-16校验</option>
-                </select>
+                <input id="iapCheckModeDisplay" class="f" type="text" readonly value="等待设备响应" />
               </div>
             </div>
             <input id="iapFileInput" class="iap-file" type="file" accept=".bin" />
@@ -1708,6 +1705,8 @@
                 <div class="iap-kv"><span>BOOT_State</span><span id="iapBootState">---</span></div>
                 <div class="iap-kv"><span>APP_SIZE</span><span id="iapAppSize">---</span></div>
                 <div class="iap-kv"><span>APP_CRC32</span><span id="iapAppCrc32">---</span></div>
+                <div class="iap-kv"><span>协议</span><span id="iapFileProtocol">---</span></div>
+                <div class="iap-kv"><span>文件信息</span><span id="iapDeviceFileName">---</span></div>
                 <div class="iap-kv"><span>读取次数</span><span id="iapOptionAttempts">0</span></div>
               </div>
             </div>
@@ -1815,14 +1814,21 @@
         const IAP_CMD_GET_ACK = 0x00,
           IAP_CMD_GET_OPTION_BYTES = 0x01,
           IAP_CMD_SET_BOOT_STATE = 0x02,
-          IAP_MAX_DATA_LEN = 32,
+          IAP_MAX_DATA_LEN = 128,
+          IAP_APP_MAX_SIZE = 0x9e00,
           XMODEM_CMD_SOH = 0x01,
           XMODEM_CMD_STX = 0x02,
           XMODEM_CMD_EOT = 0x04,
           XMODEM_CMD_ACK = 0x06,
           XMODEM_CMD_NAK = 0x15,
           XMODEM_CMD_CAN = 0x18,
-          XMODEM_CMD_NAK_CRC = 0x43;
+          XMODEM_CMD_NAK_CRC = 0x43,
+          XMODEM_WRITE_CHUNK_SIZE = 0,
+          XMODEM_WRITE_CHUNK_DELAY_MS = 0,
+          XMODEM_NEXT_PACKET_DELAY_MS = 80,
+          XMODEM_RETRY_DELAY_MS = 80,
+          XMODEM_EOT_DELAY_MS = 80,
+          YMODEM_FILE_NAME_MAX_LEN = 64;
         const BOOT_STATE = {
             READY: 0,
             APP_ERROR: 1,
@@ -1956,11 +1962,18 @@
           },
         ];
         const IAP_PROTOCOLS = {
-          "xmodem-128": { name: "Xmodem - 128", block: 128, xmodem: true },
-          "xmodem-1k": { name: "Xmodem - 1K", block: 1024, xmodem: true },
-          "ymodem-128": { name: "Ymodem - 128", block: 128, xmodem: false },
-          "ymodem-1k": { name: "Ymodem - 1K", block: 1024, xmodem: false },
+          "xmodem-128": { name: "Xmodem - 128", block: 128, ymodem: false },
+          "xmodem-1k": { name: "Xmodem - 1K", block: 1024, ymodem: false },
+          "ymodem-128": { name: "Ymodem - 128", block: 128, ymodem: true },
+          "ymodem-1k": { name: "Ymodem - 1K", block: 1024, ymodem: true },
         };
+        const OPTION_PROTOCOL_NAMES = [
+          "NONE",
+          "Xmodem - 128",
+          "Xmodem - 1K",
+          "Ymodem - 128",
+          "Ymodem - 1K",
+        ];
 
         const app = {
           supported: "serial" in navigator,
@@ -2031,8 +2044,8 @@
           iapFileDirText: "",
           iapFileBytes: null,
           iapTxBytes: null,
-          iapProtocol: "xmodem-1k",
-          iapCheck: "crc16",
+          iapProtocol: "ymodem-1k",
+          iapCheck: "auto",
           iapWaiters: [],
           iapLastFrameSig: "",
           iapLastFrameTs: 0,
@@ -2044,11 +2057,16 @@
           iapOptionAttempts: 0,
           iapOptionPollBusy: false,
           iapNoConnectionLogged: false,
+          iapLastXmodemRequest: null,
+          iapLastXmodemRequestTs: 0,
           iapBootState: null,
           iapAppKey: null,
           iapAppSize: null,
           iapAppCrc32: null,
           iapObCrc32: null,
+          iapFileProtocol: null,
+          iapDeviceFileSize: null,
+          iapDeviceFileName: "",
           iapProgress: 0,
           iapRemainBytes: null,
           iapDownloadState: "未开始",
@@ -2152,7 +2170,7 @@
           iapBackDataBtn: gid("iapBackDataBtn"),
           iapBackDevBtn: gid("iapBackDevBtn"),
           iapProtocolSelect: gid("iapProtocolSelect"),
-          iapCheckSelect: gid("iapCheckSelect"),
+          iapCheckModeDisplay: gid("iapCheckModeDisplay"),
           iapFileInput: gid("iapFileInput"),
           iapChooseFileBtn: gid("iapChooseFileBtn"),
           iapDownloadBtn: gid("iapDownloadBtn"),
@@ -2165,6 +2183,8 @@
           iapBootState: gid("iapBootState"),
           iapAppSize: gid("iapAppSize"),
           iapAppCrc32: gid("iapAppCrc32"),
+          iapFileProtocol: gid("iapFileProtocol"),
+          iapDeviceFileName: gid("iapDeviceFileName"),
           iapOptionAttempts: gid("iapOptionAttempts"),
           iapProgressBar: gid("iapProgressBar"),
           iapProgressText: gid("iapProgressText"),
@@ -2606,16 +2626,66 @@
           return `${hex(bytes.slice(0, limit))} ... (${bytes.length}B)`;
         }
         function iapProtocol() {
-          return IAP_PROTOCOLS[app.iapProtocol] || IAP_PROTOCOLS["xmodem-1k"];
+          return IAP_PROTOCOLS[app.iapProtocol] || IAP_PROTOCOLS["ymodem-1k"];
+        }
+        function optionProtocolName(v) {
+          const n = Number(v);
+          return OPTION_PROTOCOL_NAMES[n] || `协议 ${n}`;
+        }
+        function iapCheckName(mode = app.iapCheck) {
+          return mode === "crc16"
+            ? "CRC-16校验"
+            : mode === "sum"
+              ? "和校验"
+              : "等待设备响应";
+        }
+        function iapUseCrc16() {
+          return app.iapCheck !== "sum";
+        }
+        function applyIapCheckByRequest(req) {
+          const mode = req === XMODEM_CMD_NAK_CRC ? "crc16" : "sum";
+          if (app.iapCheck !== mode) {
+            app.iapCheck = mode;
+            addIapLog(`设备请求 ${controlName(req)}，自动选择 ${iapCheckName(mode)}`);
+          }
         }
         function buildIapTxBytes(src) {
           const p = iapProtocol();
-          if (!p.xmodem) return src.slice();
+          if (p.ymodem) return src.slice();
           const size = Math.ceil(src.length / p.block) * p.block || p.block;
           const out = new Uint8Array(size);
           out.fill(0x1a);
           out.set(src, 0);
           return out;
+        }
+        function asciiFromBytes(bytes) {
+          let s = "";
+          for (let i = 0; i < bytes.length; i++) {
+            const c = bytes[i] & 255;
+            if (c === 0) break;
+            s += c >= 32 && c <= 126 ? String.fromCharCode(c) : "_";
+          }
+          return s;
+        }
+        function asciiBytes(text, maxLen) {
+          const out = [];
+          for (let i = 0; i < text.length && out.length < maxLen; i++) {
+            const c = text.charCodeAt(i);
+            out.push(c >= 32 && c <= 126 ? c : 0x5f);
+          }
+          return new Uint8Array(out);
+        }
+        function ymodemFileNameBytes() {
+          const p = iapProtocol(),
+            sizeText = String(app.iapFileBytes?.length || 0),
+            maxNameLen = Math.max(
+              1,
+              Math.min(YMODEM_FILE_NAME_MAX_LEN, p.block - sizeText.length - 2),
+            ),
+            rawName = (app.iapFile?.name || "TD66S_T_APP.bin")
+              .replace(/[\\/:*?"<>|]+/g, "_")
+              .trim();
+          return asciiBytes(rawName || "TD66S_T_APP.bin", maxNameLen);
         }
         function addIapLog(msg) {
           app.iapLogs.push(`[${fTime(Date.now())}] ${msg}`);
@@ -2626,7 +2696,7 @@
           if (!el.iapView) return;
           const p = Math.max(0, Math.min(100, app.iapProgress || 0));
           el.iapProtocolSelect.value = app.iapProtocol;
-          el.iapCheckSelect.value = app.iapCheck;
+          el.iapCheckModeDisplay.value = iapCheckName();
           const optionReady = app.iapAppSize != null && app.iapBootState != null;
           el.iapStateText.textContent = !app.iapConnected
             ? "等待 GET_ACK"
@@ -2653,6 +2723,13 @@
             app.iapAppSize == null ? "---" : fmtBytes(app.iapAppSize);
           el.iapAppCrc32.textContent =
             app.iapAppCrc32 == null ? "---" : hex32(app.iapAppCrc32);
+          el.iapFileProtocol.textContent =
+            app.iapFileProtocol == null
+              ? "---"
+              : optionProtocolName(app.iapFileProtocol);
+          el.iapDeviceFileName.textContent = app.iapDeviceFileName
+            ? `${app.iapDeviceFileName} / ${fmtBytes(app.iapDeviceFileSize || 0)}`
+            : "---";
           el.iapOptionAttempts.textContent = String(app.iapOptionAttempts);
           el.iapProgressBar.style.setProperty("--p", `${p}%`);
           el.iapProgressText.textContent = `${Math.round(p)}%`;
@@ -2679,7 +2756,7 @@
         function iapPkt(cmd, data = new Uint8Array()) {
           const d = data instanceof Uint8Array ? data : new Uint8Array(data || []);
           if (d.length > IAP_MAX_DATA_LEN)
-            throw new Error("IAP data length exceeds 32 bytes");
+            throw new Error("IAP data length exceeds 128 bytes");
           const len = d.length,
             ci = new Uint8Array(3 + len);
           ci[0] = cmd & 255;
@@ -2800,7 +2877,7 @@
           try {
             frame = iapPkt(cmd, data);
           } catch (_) {
-            const msg = "IAP 单包数据长度不能超过 32 字节";
+            const msg = "IAP 单包数据长度不能超过 128 字节";
             if (tip) toast(msg);
             addIapLog(msg);
             return false;
@@ -2854,6 +2931,9 @@
           app.iapAppSize = null;
           app.iapAppCrc32 = null;
           app.iapObCrc32 = null;
+          app.iapFileProtocol = null;
+          app.iapDeviceFileSize = null;
+          app.iapDeviceFileName = "";
           addIapLog("进入更新程序界面，开始每秒发送 IAP_CMD_GET_ACK");
           const tick = async () => {
             if (!app.iap || app.iapAckPollBusy || app.iapConnected) return;
@@ -2879,6 +2959,9 @@
           app.iapAppCrc32 = null;
           app.iapBootState = null;
           app.iapObCrc32 = null;
+          app.iapFileProtocol = null;
+          app.iapDeviceFileSize = null;
+          app.iapDeviceFileName = "";
           addIapLog("GET_ACK 已确认，开始每秒发送 IAP_CMD_GET_OPTION_BYTES");
           const tick = async () => {
             if (!app.iap || app.iapOptionPollBusy || app.iapAppSize != null)
@@ -2905,16 +2988,35 @@
             bootState = u32leAt(p, 4),
             appSize = u32leAt(p, 8),
             appCrc32 = u32leAt(p, 12),
-            obCrc32 = p.length >= 20 ? u32leAt(p, 16) : null;
+            obCrc32 = p.length >= 20 ? u32leAt(p, 16) : null,
+            fileProtocol = p.length >= 24 ? u32leAt(p, 20) : null,
+            fileSize = p.length >= 28 ? u32leAt(p, 24) : null,
+            fileNameLen = p.length >= 32 ? u32leAt(p, 28) : 0;
           if (appSize == null || appCrc32 == null) return false;
+          let fileName = "";
+          if (p.length >= 32 && fileNameLen) {
+            const len = Math.min(
+              fileNameLen >>> 0,
+              YMODEM_FILE_NAME_MAX_LEN,
+              p.length - 32,
+            );
+            fileName = asciiFromBytes(p.slice(32, 32 + len));
+          }
           app.iapAppKey = appKey;
           app.iapBootState = bootState;
           app.iapAppSize = appSize >>> 0;
           app.iapAppCrc32 = appCrc32 >>> 0;
           app.iapObCrc32 = obCrc32;
+          app.iapFileProtocol = fileProtocol;
+          app.iapDeviceFileSize = fileSize;
+          app.iapDeviceFileName = fileName;
+          if (bootState !== BOOT_STATE.APP_UPDATA) clearCachedXmodemRequest();
           stopIapOptionPoll();
+          const fileInfo = fileProtocol
+            ? ` FILE=${optionProtocolName(fileProtocol)} ${fileName || "---"} ${fmtBytes(fileSize || 0)}`
+            : "";
           addIapLog(
-            `设备返回 option bytes：BOOT_State=${bootState == null ? "---" : bootStateName(bootState)} APP_SIZE=${fmtBytes(app.iapAppSize)} APP_CRC32=${hex32(app.iapAppCrc32)}`,
+            `设备返回 option bytes：BOOT_State=${bootState == null ? "---" : bootStateName(bootState)} APP_SIZE=${fmtBytes(app.iapAppSize)} APP_CRC32=${hex32(app.iapAppCrc32)}${fileInfo}`,
           );
           renderIap();
           return true;
@@ -2975,6 +3077,14 @@
           app.iapFile = file;
           app.iapFileDirText = iapFileDirectoryText(file);
           app.iapFileBytes = new Uint8Array(await file.arrayBuffer());
+          if (app.iapFileBytes.length === 0) {
+            app.iapFile = null;
+            app.iapTxBytes = null;
+            toast("文件大小不能为 0");
+            addIapLog("已拒绝 0 字节文件，避免 Ymodem 空数据包");
+            renderIap();
+            return;
+          }
           refreshIapFileDerived();
           addIapLog(
             `已选择文件 ${file.name}，${iapProtocol().name} 传输大小 ${fmtBytes(app.iapTxBytes.length)}，CRC-32 ${hex32(crc32(app.iapTxBytes))}`,
@@ -3014,13 +3124,28 @@
           toast(msg);
           renderIap();
         }
+        function isIapSerialBusy() {
+          const t = app.iapTransfer;
+          return !!(app.iap || (t && t.active));
+        }
         async function writeIapStream(bytes, label = "") {
           if (!app.isConnected || !app.writer) {
             failIapDownload("设备未连接");
             return false;
           }
           try {
-            await qwrite(bytes, false);
+            const isXmodemPacket =
+              bytes &&
+              bytes.length > 128 &&
+              (bytes[0] === XMODEM_CMD_SOH || bytes[0] === XMODEM_CMD_STX);
+            if (isXmodemPacket && XMODEM_WRITE_CHUNK_SIZE > 0) {
+              for (let off = 0; off < bytes.length; off += XMODEM_WRITE_CHUNK_SIZE) {
+                await qwrite(bytes.slice(off, off + XMODEM_WRITE_CHUNK_SIZE), false);
+                if (XMODEM_WRITE_CHUNK_DELAY_MS > 0) await sleep(XMODEM_WRITE_CHUNK_DELAY_MS);
+              }
+            } else {
+              await qwrite(bytes, false);
+            }
             addLog("发送", bytes);
             if (label) addIapLog(`${label} -> ${shortHex(bytes)}`);
             return true;
@@ -3030,18 +3155,18 @@
             return false;
           }
         }
-        function buildXmodemPacket(packetNo) {
+        function buildXYmodemPacket(packetNo, payload) {
           const p = iapProtocol(),
             block = p.block,
             seq = packetNo & 255,
-            payload = app.iapTxBytes.slice((packetNo - 1) * block, packetNo * block),
-            checkLen = app.iapCheck === "crc16" ? 2 : 1,
+            useCrc16 = iapUseCrc16(),
+            checkLen = useCrc16 ? 2 : 1,
             out = new Uint8Array(3 + block + checkLen);
           out[0] = block === 128 ? XMODEM_CMD_SOH : XMODEM_CMD_STX;
           out[1] = seq;
           out[2] = (~seq) & 255;
           out.set(payload, 3);
-          if (app.iapCheck === "crc16") {
+          if (useCrc16) {
             const c = crc16Ccitt(payload),
               i = 3 + block;
             out[i] = (c >> 8) & 255;
@@ -3053,17 +3178,49 @@
           }
           return out;
         }
-        async function requestIapOptionOnce(label = "IAP_CMD_GET_OPTION_BYTES") {
-          app.iapOptionAttempts += 1;
-          const res = await requestIapFrame(
-            `${label} #${app.iapOptionAttempts}`,
-            IAP_CMD_GET_OPTION_BYTES,
-            new Uint8Array(),
-            2200,
-          );
-          return !!(res && app.iapAppSize != null && app.iapBootState != null);
+        function buildXmodemPacket(packetNo) {
+          const p = iapProtocol(),
+            block = p.block,
+            payload = new Uint8Array(block),
+            chunk = app.iapTxBytes.slice((packetNo - 1) * block, packetNo * block);
+          payload.fill(0x1a);
+          payload.set(chunk, 0);
+          return buildXYmodemPacket(packetNo, payload);
         }
-        async function setIapBootState(state) {
+        function buildYmodemHeaderPacket(finalPacket = false) {
+          const p = iapProtocol(),
+            payload = new Uint8Array(p.block);
+          if (!finalPacket) {
+            const name = ymodemFileNameBytes(),
+              size = asciiBytes(String(app.iapFileBytes.length), 16);
+            payload.set(name, 0);
+            payload[name.length] = 0;
+            payload.set(size, name.length + 1);
+          }
+          return buildXYmodemPacket(0, payload);
+        }
+        async function requestIapOptionOnce(
+          label = "IAP_CMD_GET_OPTION_BYTES",
+          retries = 1,
+        ) {
+          for (let i = 0; i < retries; i++) {
+            app.iapOptionAttempts += 1;
+            const res = await requestIapFrame(
+              `${label} #${app.iapOptionAttempts}`,
+              IAP_CMD_GET_OPTION_BYTES,
+              new Uint8Array(),
+              2200,
+            );
+            if (res && app.iapAppSize != null && app.iapBootState != null)
+              return true;
+            if (i + 1 < retries) await sleep(350);
+          }
+          return false;
+        }
+        async function setIapBootState(state, opt = {}) {
+          const needConfirm = opt.confirm !== false,
+            failOnReject = opt.failOnReject !== false,
+            confirmDelay = opt.confirmDelay == null ? 300 : opt.confirmDelay;
           const res = await requestIapFrame(
             `IAP_CMD_SET_BOOT_STATE ${bootStateName(state)}`,
             IAP_CMD_SET_BOOT_STATE,
@@ -3071,18 +3228,20 @@
             2200,
           );
           if (!res || !res.p || !res.p.length || (res.p[0] & 255) !== 0x01) {
-            failIapDownload(`设置 ${bootStateName(state)} 失败`);
+            if (failOnReject)
+              failIapDownload(`设置 ${bootStateName(state)} 失败`);
             return false;
           }
-          await sleep(300);
+          if (!needConfirm) return true;
+          await sleep(confirmDelay);
           if (!(await requestIapOptionOnce("IAP_CMD_GET_OPTION_BYTES(状态确认)"))) {
             failIapDownload("BOOT_State 设置后未能重新读取 option bytes");
             return false;
           }
           return true;
         }
-        async function ensureIapAck() {
-          if (app.iapConnected) return true;
+        async function ensureIapAck(failOnMissing = true, force = false) {
+          if (app.iapConnected && !force) return true;
           const res = await requestIapFrame(
             "IAP_CMD_GET_ACK",
             IAP_CMD_GET_ACK,
@@ -3092,8 +3251,28 @@
           const ok = !!(res && res.p && res.p.length && (res.p[0] & 255) === 0x01);
           app.iapConnected = ok;
           if (ok) stopIapOptionPoll();
-          if (!ok) failIapDownload("GET_ACK 未响应，设备未进入 IAP 通道");
+          if (!ok && failOnMissing)
+            failIapDownload("GET_ACK 未响应，设备未进入 IAP 通道");
           return ok;
+        }
+        async function waitIapBootloaderAfterAppRequest() {
+          app.iapConnected = false;
+          app.iapBootState = null;
+          app.iapAppSize = null;
+          app.iapAppCrc32 = null;
+          app.iapObCrc32 = null;
+          app.iapFileProtocol = null;
+          app.iapDeviceFileSize = null;
+          app.iapDeviceFileName = "";
+          renderIap();
+          addIapLog("APP 已接受升级请求，等待复位进入 BootLoader 下载窗口");
+          await sleep(1600);
+          app.iapConnected = false;
+          app.iapBootState = BOOT_STATE.APP_UPDATA;
+          app.iapDownloadState = "等待设备发送 Xmodem 请求";
+          addIapLog("BootLoader 应已进入 BOOT_STATE_APP_UPDATA，停止读取 option bytes，直接等待 Xmodem 请求");
+          renderIap();
+          return true;
         }
         async function prepareIapXmodemDownload() {
           stopIapAckPoll();
@@ -3101,25 +3280,49 @@
           clearIapWaiters();
           app.iapDownloadState = "准备 IAP 下载流程";
           renderIap();
-          if (!(await ensureIapAck())) return false;
-          if (app.iapAppSize == null || app.iapBootState == null) {
-            addIapLog("下载前补读 option bytes");
-            if (!(await requestIapOptionOnce())) {
-              failIapDownload("下载前未能读取 option bytes");
-              return false;
-            }
+          const cachedReq = getCachedXmodemRequest();
+          if (cachedReq != null) {
+            stopIapAckPoll();
+            stopIapOptionPoll();
+            app.iapConnected = false;
+            app.iapBootState = BOOT_STATE.APP_UPDATA;
+            addIapLog(
+              `已收到设备 ${controlName(cachedReq)} 请求，跳过 IAP 探测命令，直接进入 Xmodem 传输`,
+            );
+            return true;
+          }
+          if (!(await ensureIapAck(true, true))) return false;
+          addIapLog("下载前重新读取 option bytes，避免复用上一轮升级状态");
+          if (!(await requestIapOptionOnce("IAP_CMD_GET_OPTION_BYTES(下载前确认)"))) {
+            failIapDownload("下载前未能读取 option bytes");
+            return false;
           }
           if (app.iapBootState === BOOT_STATE.APP) {
             addIapLog("当前处于 APP，切换到 BOOT_STATE_APP_REQUEST_UPGRAD");
-            if (!(await setIapBootState(BOOT_STATE.APP_REQUEST_UPGRAD)))
-              return false;
+            if (
+              !(await setIapBootState(BOOT_STATE.APP_REQUEST_UPGRAD, {
+                confirm: false,
+                failOnReject: false,
+              }))
+            ) {
+              addIapLog("APP_REQUEST_UPGRAD 未被当前状态接受，重新读取状态");
+              if (!(await requestIapOptionOnce("IAP_CMD_GET_OPTION_BYTES(失败后确认)"))) {
+                failIapDownload("设置 APP_REQUEST_UPGRAD 失败且无法读取状态");
+                return false;
+              }
+              if (app.iapBootState === BOOT_STATE.APP) {
+                failIapDownload("设置 APP_REQUEST_UPGRAD 失败，设备仍处于 APP");
+                return false;
+              }
+            } else if (!(await waitIapBootloaderAfterAppRequest())) return false;
           }
-          if (
-            app.iapBootState !== BOOT_STATE.APP_UPDATA &&
-            app.iapBootState !== BOOT_STATE.APP_UPDATA_READY
-          ) {
+          if (app.iapBootState !== BOOT_STATE.APP_UPDATA) {
             addIapLog("切换到 BOOT_STATE_APP_UPDATA，等待设备请求 Xmodem 数据");
-            if (!(await setIapBootState(BOOT_STATE.APP_UPDATA))) return false;
+            if (!(await setIapBootState(BOOT_STATE.APP_UPDATA, { confirm: false })))
+              return false;
+            app.iapConnected = false;
+            app.iapBootState = BOOT_STATE.APP_UPDATA;
+            await sleep(300);
           }
           return true;
         }
@@ -3137,17 +3340,36 @@
         function retryXmodemPacket(reason) {
           const t = app.iapTransfer;
           if (!t || !t.active) return;
+          const retryPhase = t.phase;
           clearIapTransferTimers(t);
           t.retries += 1;
           if (t.retries >= 5) {
             failIapDownload(`${reason}超过 5 次，下载失败`);
             return;
           }
-          addIapLog(`${reason}，500ms 后重发第 ${t.packetNo} 包`);
+          const retryText =
+            retryPhase === "wait-header-ack"
+              ? "Ymodem 文件信息包"
+              : retryPhase === "wait-eot-ack"
+                ? "EOT"
+                : retryPhase === "wait-final-request" ||
+                    retryPhase === "wait-final-ack"
+                  ? "Ymodem 结束空包"
+                  : retryPhase === "wait-header-c"
+                    ? `第 ${t.packetNo} 包`
+                    : `第 ${t.packetNo} 包`;
+          addIapLog(`${reason}，${XMODEM_RETRY_DELAY_MS}ms 后重发${retryText}`);
           t.phase = "retry-delay";
           t.delayTimer = setTimeout(() => {
-            sendXmodemCurrentPacket();
-          }, 500);
+            if (retryPhase === "wait-header-ack") sendYmodemHeaderPacket(false);
+            else if (retryPhase === "wait-eot-ack") sendXmodemEot();
+            else if (
+              retryPhase === "wait-final-request" ||
+              retryPhase === "wait-final-ack"
+            )
+              sendYmodemHeaderPacket(true);
+            else sendXmodemCurrentPacket();
+          }, XMODEM_RETRY_DELAY_MS);
         }
         function armXmodemPacketTimeout() {
           const t = app.iapTransfer;
@@ -3156,6 +3378,21 @@
           t.timeoutTimer = setTimeout(() => {
             retryXmodemPacket("等待 ACK/NAK/CAN 超时");
           }, 5000);
+        }
+        async function sendYmodemHeaderPacket(finalPacket = false) {
+          const t = app.iapTransfer;
+          if (!t || !t.active) return;
+          clearIapTransferTimers(t);
+          t.phase = finalPacket ? "wait-final-ack" : "wait-header-ack";
+          const packet = buildYmodemHeaderPacket(finalPacket),
+            label = finalPacket ? "Ymodem 结束空包" : "Ymodem 文件信息包",
+            ok = await writeIapStream(packet, label);
+          if (!ok) return;
+          app.iapDownloadState = finalPacket
+            ? "已发送 Ymodem 结束空包，等待 ACK"
+            : "已发送 Ymodem 文件信息包，等待 ACK";
+          armXmodemPacketTimeout();
+          renderIap();
         }
         async function sendXmodemCurrentPacket() {
           const t = app.iapTransfer;
@@ -3166,7 +3403,7 @@
           const packet = buildXmodemPacket(t.packetNo),
             ok = await writeIapStream(
               packet,
-              `Xmodem 第 ${t.packetNo}/${t.packetCount} 包`,
+              `${t.ymodem ? "Ymodem" : "Xmodem"} 第 ${t.packetNo}/${t.packetCount} 包`,
             );
           if (!ok) return;
           app.iapDownloadState = `已发送第 ${t.packetNo}/${t.packetCount} 包，等待设备确认`;
@@ -3182,19 +3419,19 @@
           app.iapRemainBytes = Math.max(0, t.total - confirmed);
           if (t.packetNo >= t.packetCount) {
             t.phase = "send-eot";
-            app.iapDownloadState = "文件数据发送完成，500ms 后发送 EOT";
+            app.iapDownloadState = `文件数据发送完成，${XMODEM_EOT_DELAY_MS}ms 后发送 EOT`;
             addIapLog("最后一包已 ACK，准备发送 EOT");
             t.delayTimer = setTimeout(() => {
               sendXmodemEot();
-            }, 500);
+            }, XMODEM_EOT_DELAY_MS);
           } else {
             t.packetNo += 1;
             t.retries = 0;
             t.phase = "next-delay";
-            app.iapDownloadState = `第 ${t.packetNo - 1} 包已 ACK，500ms 后发送下一包`;
+            app.iapDownloadState = `第 ${t.packetNo - 1} 包已 ACK，${XMODEM_NEXT_PACKET_DELAY_MS}ms 后发送下一包`;
             t.delayTimer = setTimeout(() => {
               sendXmodemCurrentPacket();
-            }, 500);
+            }, XMODEM_NEXT_PACKET_DELAY_MS);
           }
           renderIap();
         }
@@ -3204,14 +3441,32 @@
           clearIapTransferTimers(t);
           const ok = await writeIapStream(new Uint8Array([XMODEM_CMD_EOT]), "Xmodem EOT");
           if (!ok) return;
-          t.active = false;
+          if (t.ymodem) {
+            t.phase = "wait-eot-ack";
+            app.iapDownloadState = "已发送 EOT，等待设备 ACK";
+            armXmodemPacketTimeout();
+            renderIap();
+            return;
+          }
+          await completeIapDownload();
+        }
+        async function completeIapDownload() {
+          const t = app.iapTransfer;
+          if (t) {
+            t.active = false;
+            clearIapTransferTimers(t);
+          }
           app.iapTransfer = null;
+          clearCachedXmodemRequest();
           app.iapProgress = 100;
           app.iapRemainBytes = 0;
           app.iapDownloadState = "下载完成，正在重新读取 option bytes";
           renderIap();
           await sleep(800);
-          const refreshed = await requestIapOptionOnce("IAP_CMD_GET_OPTION_BYTES(完成校验)");
+          const refreshed = await requestIapOptionOnce(
+            "IAP_CMD_GET_OPTION_BYTES(完成校验)",
+            5,
+          );
           if (refreshed) {
             const localCrc = crc32(app.iapTxBytes),
               crcOk = app.iapAppCrc32 === localCrc,
@@ -3232,6 +3487,44 @@
           }
           renderIap();
         }
+        function clearCachedXmodemRequest() {
+          app.iapLastXmodemRequest = null;
+          app.iapLastXmodemRequestTs = 0;
+        }
+        function getCachedXmodemRequest(maxAge = 8000) {
+          const b = app.iapLastXmodemRequest;
+          if (app.iapBootState !== BOOT_STATE.APP_UPDATA) {
+            clearCachedXmodemRequest();
+            return null;
+          }
+          if (
+            (b === XMODEM_CMD_NAK || b === XMODEM_CMD_NAK_CRC) &&
+            Date.now() - app.iapLastXmodemRequestTs <= maxAge
+          )
+            return b;
+          clearCachedXmodemRequest();
+          return null;
+        }
+        function captureXmodemRequest(bytes) {
+          if (!bytes || !bytes.length) return;
+          const transfer = app.iapTransfer;
+          if (transfer && transfer.active) return;
+          for (let i = 0; i < bytes.length; i++) {
+            const b = bytes[i] & 255;
+            if (b !== XMODEM_CMD_NAK && b !== XMODEM_CMD_NAK_CRC) continue;
+            applyIapCheckByRequest(b);
+            app.iapLastXmodemRequest = b;
+            app.iapLastXmodemRequestTs = Date.now();
+            if (app.iap && !app.iapTransfer) {
+              stopIapAckPoll();
+              stopIapOptionPoll();
+              app.iapBootState = BOOT_STATE.APP_UPDATA;
+              app.iapConnected = false;
+              app.iapDownloadState = `已检测到设备 Xmodem 请求 ${controlName(b)}`;
+              renderIap();
+            }
+          }
+        }
         function feedXmodemControl(bytes) {
           const t = app.iapTransfer;
           if (!t || !t.active || !bytes || !bytes.length) return;
@@ -3249,16 +3542,84 @@
               return;
             }
             if (t.phase === "wait-request") {
-              const want = app.iapCheck === "crc16" ? XMODEM_CMD_NAK_CRC : XMODEM_CMD_NAK;
-              if (b === want) {
+              if (b === XMODEM_CMD_NAK || b === XMODEM_CMD_NAK_CRC) {
+                applyIapCheckByRequest(b);
+                if (t.ymodem) {
+                  addIapLog(`收到 ${controlName(b)}，开始发送 Ymodem 文件信息包`);
+                  sendYmodemHeaderPacket(false);
+                } else {
+                  addIapLog(`收到 ${controlName(b)}，开始发送第一包`);
+                  sendXmodemCurrentPacket();
+                }
+                return;
+              }
+              continue;
+            }
+            if (t.phase === "wait-header-ack") {
+              if (b === XMODEM_CMD_ACK) {
+                clearIapTransferTimers(t);
+                t.retries = 0;
+                t.phase = "wait-header-c";
+                app.iapDownloadState = "Ymodem 文件信息包已 ACK，等待设备请求文件数据";
+                addIapLog("Ymodem 文件信息包收到 ACK，等待设备请求 C");
+                armXmodemPacketTimeout();
+                renderIap();
+                continue;
+              }
+              if (b === XMODEM_CMD_NAK || b === XMODEM_CMD_NAK_CRC) {
+                retryXmodemPacket(`Ymodem 文件信息包收到 ${controlName(b)}`);
+                return;
+              }
+              continue;
+            }
+            if (t.phase === "wait-header-c") {
+              if (b === XMODEM_CMD_NAK || b === XMODEM_CMD_NAK_CRC) {
+                applyIapCheckByRequest(b);
+                clearIapTransferTimers(t);
+                t.retries = 0;
                 addIapLog(`收到 ${controlName(b)}，开始发送第一包`);
                 sendXmodemCurrentPacket();
                 return;
-              } else if (Date.now() - t.lastMismatchLog > 1000) {
-                t.lastMismatchLog = Date.now();
-                addIapLog(
-                  `收到 ${controlName(b)}，当前校验模式等待 ${controlName(want)}`,
-                );
+              }
+              continue;
+            }
+            if (t.phase === "wait-eot-ack") {
+              if (b === XMODEM_CMD_ACK) {
+                clearIapTransferTimers(t);
+                t.retries = 0;
+                t.phase = "wait-final-request";
+                app.iapDownloadState = "EOT 已 ACK，等待设备请求 Ymodem 结束空包";
+                addIapLog("EOT 收到 ACK，等待设备请求 C");
+                armXmodemPacketTimeout();
+                renderIap();
+                continue;
+              }
+              if (b === XMODEM_CMD_NAK) {
+                retryXmodemPacket("EOT 收到 NAK");
+                return;
+              }
+              continue;
+            }
+            if (t.phase === "wait-final-request") {
+              if (b === XMODEM_CMD_NAK || b === XMODEM_CMD_NAK_CRC) {
+                applyIapCheckByRequest(b);
+                clearIapTransferTimers(t);
+                t.retries = 0;
+                addIapLog(`收到 ${controlName(b)}，发送 Ymodem 结束空包`);
+                sendYmodemHeaderPacket(true);
+                return;
+              }
+              continue;
+            }
+            if (t.phase === "wait-final-ack") {
+              if (b === XMODEM_CMD_ACK) {
+                addIapLog("Ymodem 结束空包收到 ACK");
+                void completeIapDownload();
+                return;
+              }
+              if (b === XMODEM_CMD_NAK || b === XMODEM_CMD_NAK_CRC) {
+                retryXmodemPacket(`Ymodem 结束空包收到 ${controlName(b)}`);
+                return;
               }
               continue;
             }
@@ -3267,9 +3628,15 @@
               addIapLog(`第 ${t.packetNo} 包收到 ACK`);
               handleXmodemAck();
               return;
-            } else if (b === XMODEM_CMD_NAK || b === XMODEM_CMD_NAK_CRC) {
+            } else if (b === XMODEM_CMD_NAK) {
               retryXmodemPacket(`第 ${t.packetNo} 包收到 ${controlName(b)}`);
               return;
+            } else if (b === XMODEM_CMD_NAK_CRC) {
+              if (Date.now() - t.lastMismatchLog > 1000) {
+                t.lastMismatchLog = Date.now();
+                addIapLog(`等待第 ${t.packetNo} 包 ACK 时忽略 ${controlName(b)}`);
+              }
+              continue;
             }
           }
         }
@@ -3277,15 +3644,11 @@
           const p = iapProtocol(),
             total = app.iapTxBytes.length,
             packetCount = Math.ceil(total / p.block);
-          if (packetCount > 255) {
-            failIapDownload(
-              `当前设备端 Xmodem 程序最多支持 255 包，请改用更大的块或更小的文件`,
-            );
-            return;
-          }
+          app.iapCheck = "auto";
           app.iapTransfer = {
             active: true,
             block: p.block,
+            ymodem: p.ymodem,
             total,
             packetCount,
             packetNo: 1,
@@ -3298,14 +3661,20 @@
           };
           app.iapProgress = 0;
           app.iapRemainBytes = total;
-          app.iapDownloadState = `等待设备请求数据（${app.iapCheck === "crc16" ? "字符 C" : "NAK"}）`;
+          app.iapDownloadState = "等待设备请求数据（自动识别 C/NAK）";
           addIapLog(
-            `开始 Xmodem 下载：${p.name} / ${app.iapCheck === "crc16" ? "CRC-16校验" : "和校验"} / ${packetCount} 包 / ${fmtBytes(total)}`,
+            `开始 ${p.ymodem ? "Ymodem" : "Xmodem"} 下载：${p.name} / 校验模式自动识别 / ${packetCount} 包 / ${fmtBytes(total)}`,
           );
           app.iapTransfer.timeoutTimer = setTimeout(() => {
-            failIapDownload("等待设备 Xmodem 请求数据超时");
+            failIapDownload("等待设备 XYmodem 请求数据超时");
           }, 10000);
           renderIap();
+          const cachedReq = getCachedXmodemRequest();
+          if (cachedReq != null) {
+            app.iapLastXmodemRequest = null;
+            app.iapLastXmodemRequestTs = 0;
+            feedXmodemControl(new Uint8Array([cachedReq]));
+          }
         }
         async function startIapTestProgram(reason = "测试演示") {
           if (!app.iapTxBytes) await chooseIapFile(createDemoBin());
@@ -3340,12 +3709,14 @@
         }
         async function startIapDownload() {
           const proto = iapProtocol();
-          if (!proto.xmodem) {
-            await startIapTestProgram("Ymodem测试程序");
-            return;
-          }
           if (!app.iapTxBytes) {
             toast("文件未选择");
+            return;
+          }
+          if (app.iapTxBytes.length > IAP_APP_MAX_SIZE) {
+            failIapDownload(
+              `APP镜像超过TD66S_T IAP区域：${fmtBytes(app.iapTxBytes.length)} > ${fmtBytes(IAP_APP_MAX_SIZE)}`,
+            );
             return;
           }
           if (!app.isConnected || !app.writer) {
@@ -3359,7 +3730,7 @@
           app.iapRemainBytes = app.iapTxBytes.length;
           app.iapDownloadState = "准备下载";
           addIapLog(
-            `下载请求：${proto.name} / ${app.iapCheck === "crc16" ? "CRC-16校验" : "和校验"} / ${fmtBytes(app.iapTxBytes.length)}`,
+            `下载请求：${proto.name} / 校验模式自动识别 / ${fmtBytes(app.iapTxBytes.length)}`,
           );
           renderIap();
           if (!(await prepareIapXmodemDownload())) return;
@@ -4131,6 +4502,10 @@
             if (tip) toast("未连接设备，无法发送");
             return false;
           }
+          if (isIapSerialBusy()) {
+            if (tip) toast("IAP升级期间禁止发送普通串口数据");
+            return false;
+          }
           if (!payload || !payload.length) {
             if (tip) toast("发送内容为空");
             return false;
@@ -4157,6 +4532,7 @@
         }
         async function sendData(cmd, data = new Uint8Array()) {
           if (!app.isConnected || !app.writer) return false;
+          if (isIapSerialBusy()) return false;
           const p = pkt(cmd, data);
           try {
             let off = 0;
@@ -4208,6 +4584,7 @@
                 const c =
                   value instanceof Uint8Array ? value : new Uint8Array(value);
                 pushRxFrameChunk(c);
+                captureXmodemRequest(c);
                 feedXmodemControl(c);
                 feedIap(c);
                 feedTest(c);
@@ -4341,7 +4718,7 @@
           const dt = ++app.dataToken,
             pt = ++app.portToken;
           (async () => {
-            while (dt === app.dataToken && app.isConnected && !app.dev) {
+            while (dt === app.dataToken && app.isConnected && !app.dev && !app.iap) {
               const st = Date.now();
               await sendData(CMD_ACK);
               await sleep(5);
@@ -4359,7 +4736,7 @@
             }
           })();
           (async () => {
-            while (pt === app.portToken && app.isConnected && !app.dev) {
+            while (pt === app.portToken && app.isConnected && !app.dev && !app.iap) {
               const st = Date.now();
               for (let p = 0; p < PORT_COUNT; p++) {
                 if (p > 0) await sleep(5);
@@ -4841,12 +5218,6 @@
             app.iapProtocol = el.iapProtocolSelect.value;
             refreshIapFileDerived();
             addIapLog(`传输协议已切换为 ${iapProtocol().name}`);
-          };
-          el.iapCheckSelect.onchange = () => {
-            app.iapCheck = el.iapCheckSelect.value;
-            addIapLog(
-              `校验模式已切换为 ${app.iapCheck === "crc16" ? "CRC-16校验" : "和校验"}`,
-            );
           };
           el.iapChooseFileBtn.onclick = () => el.iapFileInput.click();
           el.iapFileInput.onchange = () => {
