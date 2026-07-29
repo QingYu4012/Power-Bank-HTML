@@ -274,3 +274,31 @@
     - 升级开始时清除旧 APP 有效标记，完成后校验 APP 向量、大小和 CRC32，再写入有效标记。
     - 支持 ACK、NAK、CAN、EOT、超时重试和 Ymodem 文件信息包处理。
 4. 未验证：本次仅整理 IAP 文档和下位机示例代码，未执行目标 MCU 工程编译及硬件升级验证。
+
+## 2026/7/29 V1.5
+1. 加固网页 IAP 会话与串口接收：
+    - WebSerial 接收缓冲扩大到 64KiB，并为串口 reader、writer、IAP option bytes、轮询和传输会话增加代次标识，断开重连后不再接受旧 reader、旧写队列或旧查询结果。
+    - IAP 数据统一由单一入口分流命令帧与 XYmodem 控制字符，移除内容去重和跨阶段缓存字符 `C` 的逻辑，避免相同 ACK/NAK 被误删或旧控制字符推进新会话。
+    - 文件异步读取使用原子代次提交；点击下载时固化文件、协议、CRC、传输数据和包数快照，所有准备、发送、完成校验、定时器和重试只允许操作本轮快照。
+    - 串口打开和清理使用同一连接队列串行执行，清理过程只操作进入 `await` 前捕获的旧 reader/writer/port；`qwrite` 在节流、写入前后同时核对串口代次、writer 对象和 IAP 操作代次。
+    - 主动取消会立即废弃旧操作、等待旧写链收敛、发送双 `CAN`，再持续 600ms 读取并丢弃旧 IAP 响应；取消屏障完成前锁定新任务，旧 waiter、轮询和迟到响应不能覆盖新会话。
+2. 完善 X/Ymodem 重试与结束确认：
+    - 新增 `IAP_CMD_SET_TRANSFER_INFO (0x03)`：设备进入 `BOOT_STATE_APP_UPDATA` 后、首个 XYmodem 包之前，下发 8 字节小端 `SIZE(uint32)+CRC32(uint32)`，响应首字节为 `0x01` 后才允许开始传输。
+    - Xmodem 清单使用补齐后的传输长度和 CRC32，Ymodem 使用原始文件长度和 CRC32；设备拒绝清单、提前 EOT 或最终 SIZE/CRC32 不匹配时立即终止。
+    - Xmodem、Ymodem 均等待 EOT 的设备 ACK；Ymodem 按双 EOT、ACK+C、结束空包顺序完成，并支持 NAK、超时和最终 ACK 丢失后的重复发送。
+    - 升级成功必须读取“本次传输之后”的新 option bytes，并同时核对 `APP_KEY`、完成状态、传输大小、CRC32、协议类型和 Ymodem 原始文件大小。
+    - 数据包和 EOT 阶段分别计数重试；应答突发以静默窗口内最后一个控制字符为准，结束或异常后统一释放控件、轮询和定时器。
+3. 新增硬件循环测试程序 `tools/IapLoopTest.cs`：
+    - 支持 `--protocol all|xmodem-128|xmodem-1k|ymodem-128|ymodem-1k`、循环次数、日志路径和 COM/波特率参数。
+    - 每个包记录 NAK、超时、重试次数和耗时；首个应答后以 20ms 静默窗口内的最后控制字符为准，消除重复 ACK/NAK 突发造成的跨包错配。
+    - 支持 `--inject-drop-stx-packet N`，可在单个 1K 协议的指定数据包首发时故意省略 STX，并要求设备 NAK 后再完整重发。
+    - 新增 `--fault-suite`：覆盖 8 字节 CAN 突发、提前 EOT、Ymodem 文件头/结束空包 CRC 错误、首次 ACK/C 丢失、完成后旧文件头以及完成 ACK 窗口刷新。
+4. 配套兼容性：
+    - V1.5 上位机/测试程序必须与 V0.7 BootLoader 配套。旧上位机不发送 `0x03`，新 BootLoader 会拒绝开始擦写；旧 BootLoader 不识别 `0x03`，新上位机会因清单未确认而终止。
+    - 清单仅在设备 XYmodem 空闲、块号为零且大小为 `8..0x9E00` 时接受，完成或失败后即消费，下一轮必须重新发送。首次部署应先使用 J-Link 更新 BootLoader。
+5. 实际验证：
+    - `IapLoopTest.cs` 使用 .NET Framework 4.0 `csc.exe` 编译通过，`index.html` JavaScript 语法检查通过；浏览器四协议选择、演示忙锁和进度恢复测试通过且控制台无错误。
+    - 浏览器定向竞态测试通过：旧 STX 写入挂起时主动取消，新任务保持锁定；旧写结束后严格发送 `CAN CAN`，排空期间旧 Option Bytes 被忽略；并发打开/清理按连接队列串行，旧清理未关闭新连接。
+    - 故障套件在 CH341 `COM7 @ 1500000` 实机通过上述异常路径，并完成四协议各一次完整升级，4/4 PASS。
+    - 正式循环从 20:41:03 运行至 20:56:34：使用 33324 字节 `H20_APP.bin`，Xmodem-128、Xmodem-1K、Ymodem-128、Ymodem-1K 各连续 10 次，共 40/40 PASS；40 次清单全部确认，30 次 NAK 均完整重发后 ACK，0 次超时。
+    - 最终 J-Link 烧录后再次执行 Ymodem-1K 第 30 包丢 STX：47ms 收到 NAK，完整重发后 108ms 收到 ACK，最终 SIZE/CRC32 校验通过，1/1 PASS。

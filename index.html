@@ -1814,8 +1814,11 @@
         const IAP_CMD_GET_ACK = 0x00,
           IAP_CMD_GET_OPTION_BYTES = 0x01,
           IAP_CMD_SET_BOOT_STATE = 0x02,
+          IAP_CMD_SET_TRANSFER_INFO = 0x03,
           IAP_MAX_DATA_LEN = 128,
           IAP_APP_MAX_SIZE = 0x9e00,
+          IAP_APP_READY_KEY = 0xaa55bbdd,
+          WEB_SERIAL_BUFFER_SIZE = 64 * 1024,
           XMODEM_CMD_SOH = 0x01,
           XMODEM_CMD_STX = 0x02,
           XMODEM_CMD_EOT = 0x04,
@@ -1828,6 +1831,7 @@
           XMODEM_NEXT_PACKET_DELAY_MS = 80,
           XMODEM_RETRY_DELAY_MS = 80,
           XMODEM_EOT_DELAY_MS = 80,
+          IAP_CANCEL_RX_DRAIN_MS = 600,
           YMODEM_FILE_NAME_MAX_LEN = 64;
         const BOOT_STATE = {
             READY: 0,
@@ -1986,6 +1990,10 @@
           writer: null,
           reader: null,
           readActive: false,
+          connectionGeneration: 0,
+          connectionBusy: false,
+          connectionQ: Promise.resolve(),
+          serialGeneration: 0,
           writeQ: Promise.resolve(),
           isConnected: false,
           pendingStatic: new Set(STATIC_TYPES),
@@ -2047,8 +2055,6 @@
           iapProtocol: "ymodem-1k",
           iapCheck: "auto",
           iapWaiters: [],
-          iapLastFrameSig: "",
-          iapLastFrameTs: 0,
           iapAckTimer: null,
           iapAckAttempts: 0,
           iapAckPollBusy: false,
@@ -2057,8 +2063,13 @@
           iapOptionAttempts: 0,
           iapOptionPollBusy: false,
           iapNoConnectionLogged: false,
-          iapLastXmodemRequest: null,
-          iapLastXmodemRequestTs: 0,
+          iapOptionGeneration: 0,
+          iapLastOption: null,
+          iapPollGeneration: 0,
+          iapOperationGeneration: 0,
+          iapBusy: false,
+          iapCanceling: false,
+          iapCancelPromise: Promise.resolve(),
           iapBootState: null,
           iapAppKey: null,
           iapAppSize: null,
@@ -2356,9 +2367,12 @@
           el.statusLabel.textContent = app.isConnected ? "已连接" : "未连接";
           el.statusConfigBtn.classList.toggle("on", app.isConnected);
           el.connectToggleBtn.classList.toggle("on", app.isConnected);
-          el.connectToggleBtn.textContent = app.isConnected
-            ? "🔌 断开"
-            : "🔌 连接";
+          el.connectToggleBtn.disabled = app.connectionBusy;
+          el.connectToggleBtn.textContent = app.connectionBusy
+            ? "处理中"
+            : app.isConnected
+              ? "🔌 断开"
+              : "🔌 连接";
           const ready = app.isConnected && !!app.writer;
           el.passthroughReadyText.textContent = ready
             ? "透传已连接"
@@ -2639,11 +2653,11 @@
               ? "和校验"
               : "等待设备响应";
         }
-        function iapUseCrc16() {
-          return app.iapCheck !== "sum";
-        }
         function applyIapCheckByRequest(req) {
           const mode = req === XMODEM_CMD_NAK_CRC ? "crc16" : "sum";
+          /* 设备握手决定本轮校验方式，同时写入传输快照，避免后续界面状态变化影响在途数据包。 */
+          const transfer = app.iapTransfer;
+          if (transfer && transfer.active) transfer.checkMode = mode;
           if (app.iapCheck !== mode) {
             app.iapCheck = mode;
             addIapLog(`设备请求 ${controlName(req)}，自动选择 ${iapCheckName(mode)}`);
@@ -2675,17 +2689,16 @@
           }
           return new Uint8Array(out);
         }
-        function ymodemFileNameBytes() {
-          const p = iapProtocol(),
-            sizeText = String(app.iapFileBytes?.length || 0),
+        function ymodemFileNameBytes(t) {
+          const sizeText = String(t.rawSize),
             maxNameLen = Math.max(
               1,
-              Math.min(YMODEM_FILE_NAME_MAX_LEN, p.block - sizeText.length - 2),
+              Math.min(YMODEM_FILE_NAME_MAX_LEN, t.block - sizeText.length - 2),
             ),
-            rawName = (app.iapFile?.name || "TD66S_T_APP.bin")
+            rawName = (t.fileName || "H20_APP.bin")
               .replace(/[\\/:*?"<>|]+/g, "_")
               .trim();
-          return asciiBytes(rawName || "TD66S_T_APP.bin", maxNameLen);
+          return asciiBytes(rawName || "H20_APP.bin", maxNameLen);
         }
         function addIapLog(msg) {
           app.iapLogs.push(`[${fTime(Date.now())}] ${msg}`);
@@ -2695,6 +2708,16 @@
         function renderIap() {
           if (!el.iapView) return;
           const p = Math.max(0, Math.min(100, app.iapProgress || 0));
+          const transferBusy =
+            app.iapBusy ||
+            app.iapCanceling ||
+            !!(app.iapTransfer && app.iapTransfer.active);
+          /* 准备、发送和完成校验期间锁定可变配置，返回按钮仍可用于主动取消。 */
+          el.iapProtocolSelect.disabled = transferBusy;
+          el.iapFileInput.disabled = transferBusy;
+          el.iapChooseFileBtn.disabled = transferBusy;
+          el.iapDownloadBtn.disabled = transferBusy;
+          el.iapDemoBtn.disabled = transferBusy;
           el.iapProtocolSelect.value = app.iapProtocol;
           el.iapCheckModeDisplay.value = iapCheckName();
           const optionReady = app.iapAppSize != null && app.iapBootState != null;
@@ -2814,11 +2837,19 @@
           }
           return fs;
         }
-        function addIapWaiter(cmd, timeoutMs = 1500) {
+        function addIapWaiter(
+          cmd,
+          timeoutMs = 1500,
+          transferInput = null,
+        ) {
           let entry = null;
           const promise = new Promise((resolve) => {
             entry = {
               cmd: cmd & 0x7f,
+              serialGeneration: app.serialGeneration,
+              operationGeneration: transferInput
+                ? transferInput.operationGeneration
+                : null,
               done: false,
               resolve,
               timer: null,
@@ -2842,13 +2873,25 @@
             },
           };
         }
-        function resolveIapWaiters(rawCmd, p) {
+        function resolveIapWaiters(rawCmd, p, option = null) {
           const cmd = rawCmd & 0x7f;
           app.iapWaiters = app.iapWaiters.filter((w) => {
+            const stale =
+              w.serialGeneration !== app.serialGeneration ||
+              (w.operationGeneration != null &&
+                w.operationGeneration !== app.iapOperationGeneration);
+            if (stale) {
+              if (!w.done) {
+                w.done = true;
+                clearTimeout(w.timer);
+                w.resolve(null);
+              }
+              return false;
+            }
             if (w.done || w.cmd !== cmd) return !w.done;
             w.done = true;
             clearTimeout(w.timer);
-            w.resolve({ cmd: rawCmd, p });
+            w.resolve({ cmd: rawCmd, p, option });
             return false;
           });
         }
@@ -2861,8 +2904,18 @@
           });
           app.iapWaiters = [];
         }
-        async function sendIapCommand(name, cmd, data = new Uint8Array(), tip = false) {
+        async function sendIapCommand(
+          name,
+          cmd,
+          data = new Uint8Array(),
+          tip = false,
+          transferInput = null,
+        ) {
+          if (transferInput && !isIapCommandContextActive(transferInput))
+            return false;
           if (!app.isConnected || !app.writer) {
+            if (transferInput && !isIapCommandContextActive(transferInput))
+              return false;
             app.iapDownloadState = "设备未连接";
             if (tip) toast("设备未连接");
             if (!app.iapNoConnectionLogged) {
@@ -2872,6 +2925,11 @@
             renderIap();
             return false;
           }
+          const writeGeneration = app.serialGeneration,
+            writeWriter = app.writer,
+            operationGeneration = transferInput
+              ? transferInput.operationGeneration
+              : null;
           app.iapNoConnectionLogged = false;
           let frame = null;
           try {
@@ -2883,11 +2941,29 @@
             return false;
           }
           try {
-            await qwrite(frame, true);
+            await qwrite(
+              frame,
+              true,
+              writeGeneration,
+              writeWriter,
+              operationGeneration,
+            );
+            if (
+              writeGeneration !== app.serialGeneration ||
+              writeWriter !== app.writer ||
+              (transferInput && !isIapCommandContextActive(transferInput))
+            )
+              return false;
             addLog("发送", frame);
             addIapLog(`${name} -> ${shortHex(frame, 64)}`);
             return true;
           } catch (_) {
+            if (
+              writeGeneration !== app.serialGeneration ||
+              writeWriter !== app.writer ||
+              (transferInput && !isIapCommandContextActive(transferInput))
+            )
+              return false;
             if (tip) toast("IAP 命令发送失败，请检查设备连接");
             stopIapAckPoll();
             stopIapOptionPoll();
@@ -2901,16 +2977,29 @@
           cmd,
           data = new Uint8Array(),
           timeoutMs = 1800,
+          transferInput = null,
         ) {
-          const waiter = addIapWaiter(cmd, timeoutMs),
-            sent = await sendIapCommand(name, cmd, data, false);
+          if (transferInput && !isIapCommandContextActive(transferInput))
+            return null;
+          const waiter = addIapWaiter(cmd, timeoutMs, transferInput),
+            sent = await sendIapCommand(
+              name,
+              cmd,
+              data,
+              false,
+              transferInput,
+            );
           if (!sent) {
             waiter.cancel();
             return null;
           }
-          return waiter.promise;
+          const response = await waiter.promise;
+          if (transferInput && !isIapCommandContextActive(transferInput))
+            return null;
+          return response;
         }
         function stopIapAckPoll() {
+          app.iapPollGeneration += 1;
           if (app.iapAckTimer) {
             clearInterval(app.iapAckTimer);
             app.iapAckTimer = null;
@@ -2921,9 +3010,11 @@
           stopIapAckPoll();
           stopIapOptionPoll();
           clearIapWaiters();
+          const pollContext = Object.freeze({
+            operationGeneration: app.iapOperationGeneration,
+            pollGeneration: app.iapPollGeneration,
+          });
           app.iapConnected = false;
-          app.iapLastFrameSig = "";
-          app.iapLastFrameTs = 0;
           app.iapAckAttempts = 0;
           app.iapOptionAttempts = 0;
           app.iapBootState = null;
@@ -2936,24 +3027,42 @@
           app.iapDeviceFileName = "";
           addIapLog("进入更新程序界面，开始每秒发送 IAP_CMD_GET_ACK");
           const tick = async () => {
-            if (!app.iap || app.iapAckPollBusy || app.iapConnected) return;
+            if (
+              !isIapCommandContextActive(pollContext) ||
+              app.iapAckPollBusy ||
+              app.iapConnected
+            )
+              return;
             app.iapAckPollBusy = true;
             app.iapAckAttempts += 1;
-            await sendIapCommand("IAP_CMD_GET_ACK", IAP_CMD_GET_ACK);
-            app.iapAckPollBusy = false;
+            await sendIapCommand(
+              "IAP_CMD_GET_ACK",
+              IAP_CMD_GET_ACK,
+              new Uint8Array(),
+              false,
+              pollContext,
+            );
+            if (pollContext.pollGeneration === app.iapPollGeneration)
+              app.iapAckPollBusy = false;
           };
           tick();
           app.iapAckTimer = setInterval(tick, 1000);
           renderIap();
         }
         function stopIapOptionPoll() {
-          if (!app.iapOptionTimer) return;
-          clearInterval(app.iapOptionTimer);
-          app.iapOptionTimer = null;
+          app.iapPollGeneration += 1;
+          if (app.iapOptionTimer) {
+            clearInterval(app.iapOptionTimer);
+            app.iapOptionTimer = null;
+          }
           app.iapOptionPollBusy = false;
         }
         function startIapOptionPoll() {
           stopIapOptionPoll();
+          const pollContext = Object.freeze({
+            operationGeneration: app.iapOperationGeneration,
+            pollGeneration: app.iapPollGeneration,
+          });
           app.iapOptionAttempts = 0;
           app.iapAppSize = null;
           app.iapAppCrc32 = null;
@@ -2964,16 +3073,25 @@
           app.iapDeviceFileName = "";
           addIapLog("GET_ACK 已确认，开始每秒发送 IAP_CMD_GET_OPTION_BYTES");
           const tick = async () => {
-            if (!app.iap || app.iapOptionPollBusy || app.iapAppSize != null)
+            if (
+              !isIapCommandContextActive(pollContext) ||
+              app.iapOptionPollBusy ||
+              app.iapAppSize != null
+            )
               return;
             app.iapOptionPollBusy = true;
             app.iapOptionAttempts += 1;
             await sendIapCommand(
               `IAP_CMD_GET_OPTION_BYTES #${app.iapOptionAttempts}`,
               IAP_CMD_GET_OPTION_BYTES,
+              new Uint8Array(),
+              false,
+              pollContext,
             );
-            app.iapOptionPollBusy = false;
-            renderIap();
+            if (pollContext.pollGeneration === app.iapPollGeneration) {
+              app.iapOptionPollBusy = false;
+              renderIap();
+            }
           };
           tick();
           app.iapOptionTimer = setInterval(tick, 1000);
@@ -3010,7 +3128,19 @@
           app.iapFileProtocol = fileProtocol;
           app.iapDeviceFileSize = fileSize;
           app.iapDeviceFileName = fileName;
-          if (bootState !== BOOT_STATE.APP_UPDATA) clearCachedXmodemRequest();
+          /* 有效帧才推进代次，并把同一帧字段固化，避免旧全局值满足新请求。 */
+          const option = Object.freeze({
+            generation: ++app.iapOptionGeneration,
+            appKey: appKey >>> 0,
+            bootState: bootState >>> 0,
+            appSize: appSize >>> 0,
+            appCrc32: appCrc32 >>> 0,
+            obCrc32: obCrc32 == null ? null : obCrc32 >>> 0,
+            fileProtocol: fileProtocol == null ? null : fileProtocol >>> 0,
+            fileSize: fileSize == null ? null : fileSize >>> 0,
+            fileName,
+          });
+          app.iapLastOption = option;
           stopIapOptionPoll();
           const fileInfo = fileProtocol
             ? ` FILE=${optionProtocolName(fileProtocol)} ${fileName || "---"} ${fmtBytes(fileSize || 0)}`
@@ -3019,10 +3149,12 @@
             `设备返回 option bytes：BOOT_State=${bootState == null ? "---" : bootStateName(bootState)} APP_SIZE=${fmtBytes(app.iapAppSize)} APP_CRC32=${hex32(app.iapAppCrc32)}${fileInfo}`,
           );
           renderIap();
-          return true;
+          return option;
         }
         function onIapFrame(rawCmd, p) {
+          if (!app.iap || app.iapCanceling) return;
           const cmd = rawCmd & 0x7f;
+          let option = null;
           if (cmd === IAP_CMD_GET_ACK) {
             if (p && p.length && (p[0] & 255) === 0x01) {
               app.iapConnected = true;
@@ -3033,28 +3165,82 @@
               addIapLog("设备 GET_ACK 响应为 0，连接未确认");
             }
           } else if (cmd === IAP_CMD_GET_OPTION_BYTES) {
-            applyIapOptionBytes(p);
+            option = applyIapOptionBytes(p);
           } else if (cmd === IAP_CMD_SET_BOOT_STATE) {
             const ok = p && p.length && (p[0] & 255) === 0x01;
             addIapLog(ok ? "BOOT_State 设置完成" : "BOOT_State 设置失败：参数错误");
           }
-          resolveIapWaiters(rawCmd, p);
+          resolveIapWaiters(rawCmd, p, option);
         }
         function dispatchIapFrame(rawCmd, p) {
-          const sig = `${rawCmd & 255}:${hex(p || new Uint8Array())}`;
-          const now = Date.now();
-          if (sig === app.iapLastFrameSig && now - app.iapLastFrameTs < 120)
-            return;
-          app.iapLastFrameSig = sig;
-          app.iapLastFrameTs = now;
+          /* 原始串口流只解析一次，不再按内容去重，避免丢弃紧邻的最新响应。 */
           onIapFrame(rawCmd, p);
         }
-        function stopIapDownload() {
+        function stopIapDownload(sendCan = true) {
+          const transfer = app.iapTransfer,
+            hadActiveOperation =
+              app.iapBusy || !!(transfer && transfer.active),
+            writeGeneration = app.serialGeneration,
+            writeWriter = app.writer;
+          /* 每次停止都废弃尚未完成的异步步骤，防止旧流程在重连或新一轮下载中继续运行。 */
+          app.iapOperationGeneration += 1;
+          app.iapBusy = false;
+          stopIapAckPoll();
+          stopIapOptionPoll();
+          clearIapWaiters();
+          app.bufIap.length = 0;
           if (app.iapDownloadTimer) {
             clearInterval(app.iapDownloadTimer);
             app.iapDownloadTimer = null;
           }
           stopIapTransfer();
+          if (
+            !hadActiveOperation ||
+            !sendCan ||
+            app.iapCanceling ||
+            !app.isConnected ||
+            !writeWriter
+          )
+            return app.iapCancelPromise;
+          /* 取消屏障排在旧写链之后发送双CAN，完成前禁止启动下一轮IAP。 */
+          app.iapCanceling = true;
+          const cancelWrite = qwrite(
+              new Uint8Array([XMODEM_CMD_CAN, XMODEM_CMD_CAN]),
+              false,
+              writeGeneration,
+              writeWriter,
+            ),
+            cancelTimeout = sleep(1500).then(() => {
+              throw new Error("IAP cancel timeout");
+            }),
+            cancelPromise = Promise.race([cancelWrite, cancelTimeout])
+            .then(async () => {
+              if (
+                writeGeneration === app.serialGeneration &&
+                writeWriter === app.writer
+              )
+                addIapLog("主动取消：旧写链已收敛并发送双 CAN");
+              /* 持续读取但丢弃旧响应，覆盖64KB串口缓存排空时间后再开放新任务。 */
+              await sleep(IAP_CANCEL_RX_DRAIN_MS);
+              app.bufIap.length = 0;
+            })
+            .catch(async () => {
+              if (
+                writeGeneration === app.serialGeneration &&
+                writeWriter === app.writer &&
+                app.isConnected
+              )
+                await disconn("IAP取消写入失败，透传通道已安全断开");
+            })
+            .finally(() => {
+              if (app.iapCancelPromise !== cancelPromise) return;
+              app.bufIap.length = 0;
+              app.iapCanceling = false;
+              renderIap();
+            });
+          app.iapCancelPromise = cancelPromise;
+          renderIap();
+          return cancelPromise;
         }
         function iapFileDirectoryText(file) {
           if (!file) return "";
@@ -3069,26 +3255,64 @@
           return "浏览器安全限制：当前网页环境无法读取真实目录";
         }
         async function chooseIapFile(file) {
-          if (!file) return;
+          if (!file) return false;
           if (!/\.bin$/i.test(file.name)) {
             toast("请选择 .bin 文件");
-            return;
+            return false;
           }
-          app.iapFile = file;
-          app.iapFileDirText = iapFileDirectoryText(file);
-          app.iapFileBytes = new Uint8Array(await file.arrayBuffer());
-          if (app.iapFileBytes.length === 0) {
-            app.iapFile = null;
-            app.iapTxBytes = null;
-            toast("文件大小不能为 0");
-            addIapLog("已拒绝 0 字节文件，避免 Ymodem 空数据包");
-            renderIap();
-            return;
+          if (
+            app.iapBusy ||
+            app.iapCanceling ||
+            (app.iapTransfer && app.iapTransfer.active)
+          ) {
+            toast("IAP任务正在进行，暂不能更换文件");
+            return false;
           }
-          refreshIapFileDerived();
-          addIapLog(
-            `已选择文件 ${file.name}，${iapProtocol().name} 传输大小 ${fmtBytes(app.iapTxBytes.length)}，CRC-32 ${hex32(crc32(app.iapTxBytes))}`,
-          );
+          /* 文件读取期间复用IAP代次和忙碌锁，返回页面或新任务会使迟到的读取结果自动失效。 */
+          const loadGeneration = ++app.iapOperationGeneration,
+            fileDirText = iapFileDirectoryText(file);
+          app.iapBusy = true;
+          app.iapDownloadState = `正在读取文件 ${file.name}`;
+          renderIap();
+          try {
+            const fileBytes = new Uint8Array(await file.arrayBuffer());
+            if (
+              loadGeneration !== app.iapOperationGeneration ||
+              !app.iapBusy ||
+              !app.iap
+            )
+              return false;
+            if (fileBytes.length === 0) {
+              app.iapFile = null;
+              app.iapFileDirText = "";
+              app.iapFileBytes = null;
+              app.iapTxBytes = null;
+              toast("文件大小不能为 0");
+              addIapLog("已拒绝 0 字节文件，避免 Ymodem 空数据包");
+              return false;
+            }
+            /* 文件对象、目录和字节在同一个同步阶段提交，禁止出现新文件名配旧数据。 */
+            app.iapFile = file;
+            app.iapFileDirText = fileDirText;
+            app.iapFileBytes = fileBytes;
+            refreshIapFileDerived();
+            addIapLog(
+              `已选择文件 ${file.name}，${iapProtocol().name} 传输大小 ${fmtBytes(app.iapTxBytes.length)}，CRC-32 ${hex32(crc32(app.iapTxBytes))}`,
+            );
+            return true;
+          } catch (error) {
+            if (loadGeneration === app.iapOperationGeneration && app.iapBusy) {
+              app.iapDownloadState = "文件读取失败";
+              addIapLog(`文件读取失败：${error?.message || error}`);
+              toast("文件读取失败");
+            }
+            return false;
+          } finally {
+            if (loadGeneration === app.iapOperationGeneration) {
+              app.iapBusy = false;
+              renderIap();
+            }
+          }
         }
         function createDemoBin() {
           const size = 7357;
@@ -3117,8 +3341,13 @@
           clearIapTransferTimers(t);
           app.iapTransfer = null;
         }
-        function failIapDownload(msg) {
-          stopIapTransfer();
+        function failIapDownload(
+          msg,
+          transferInput = null,
+          sendCan = true,
+        ) {
+          if (transferInput && !isIapOperationActive(transferInput)) return;
+          stopIapDownload(sendCan);
           app.iapDownloadState = msg;
           addIapLog(msg);
           toast(msg);
@@ -3126,13 +3355,19 @@
         }
         function isIapSerialBusy() {
           const t = app.iapTransfer;
-          return !!(app.iap || (t && t.active));
+          return !!(app.iap || app.iapCanceling || (t && t.active));
         }
-        async function writeIapStream(bytes, label = "") {
+        async function writeIapStream(bytes, label = "", transferInput = null) {
+          if (transferInput && !isIapOperationActive(transferInput)) return false;
           if (!app.isConnected || !app.writer) {
-            failIapDownload("设备未连接");
+            failIapDownload("设备未连接", transferInput);
             return false;
           }
+          const writeGeneration = app.serialGeneration,
+            writeWriter = app.writer,
+            operationGeneration = transferInput
+              ? transferInput.operationGeneration
+              : null;
           try {
             const isXmodemPacket =
               bytes &&
@@ -3140,26 +3375,62 @@
               (bytes[0] === XMODEM_CMD_SOH || bytes[0] === XMODEM_CMD_STX);
             if (isXmodemPacket && XMODEM_WRITE_CHUNK_SIZE > 0) {
               for (let off = 0; off < bytes.length; off += XMODEM_WRITE_CHUNK_SIZE) {
-                await qwrite(bytes.slice(off, off + XMODEM_WRITE_CHUNK_SIZE), false);
-                if (XMODEM_WRITE_CHUNK_DELAY_MS > 0) await sleep(XMODEM_WRITE_CHUNK_DELAY_MS);
+                await qwrite(
+                  bytes.slice(off, off + XMODEM_WRITE_CHUNK_SIZE),
+                  false,
+                  writeGeneration,
+                  writeWriter,
+                  operationGeneration,
+                );
+                if (
+                  writeGeneration !== app.serialGeneration ||
+                  writeWriter !== app.writer ||
+                  (transferInput && !isIapOperationActive(transferInput))
+                )
+                  return false;
+                if (XMODEM_WRITE_CHUNK_DELAY_MS > 0) {
+                  await sleep(XMODEM_WRITE_CHUNK_DELAY_MS);
+                  if (
+                    transferInput &&
+                    !isIapOperationActive(transferInput)
+                  )
+                    return false;
+                }
               }
             } else {
-              await qwrite(bytes, false);
+              await qwrite(
+                bytes,
+                false,
+                writeGeneration,
+                writeWriter,
+                operationGeneration,
+              );
             }
+            if (
+              writeGeneration !== app.serialGeneration ||
+              writeWriter !== app.writer ||
+              (transferInput && !isIapOperationActive(transferInput))
+            )
+              return false;
             addLog("发送", bytes);
             if (label) addIapLog(`${label} -> ${shortHex(bytes)}`);
             return true;
           } catch (_) {
+            if (
+              writeGeneration !== app.serialGeneration ||
+              writeWriter !== app.writer ||
+              (transferInput && !isIapOperationActive(transferInput))
+            )
+              return false;
             stopIapTransfer();
             await disconn("透传通道已断开，请重新连接");
             return false;
           }
         }
-        function buildXYmodemPacket(packetNo, payload) {
-          const p = iapProtocol(),
-            block = p.block,
+        function buildXYmodemPacket(t, packetNo, payload) {
+          const block = t.block,
             seq = packetNo & 255,
-            useCrc16 = iapUseCrc16(),
+            useCrc16 = t.checkMode !== "sum",
             checkLen = useCrc16 ? 2 : 1,
             out = new Uint8Array(3 + block + checkLen);
           out[0] = block === 128 ? XMODEM_CMD_SOH : XMODEM_CMD_STX;
@@ -3178,84 +3449,176 @@
           }
           return out;
         }
-        function buildXmodemPacket(packetNo) {
-          const p = iapProtocol(),
-            block = p.block,
+        function buildXmodemPacket(t, packetNo) {
+          const block = t.block,
             payload = new Uint8Array(block),
-            chunk = app.iapTxBytes.slice((packetNo - 1) * block, packetNo * block);
+            chunk = t.txBytes.slice((packetNo - 1) * block, packetNo * block);
           payload.fill(0x1a);
           payload.set(chunk, 0);
-          return buildXYmodemPacket(packetNo, payload);
+          return buildXYmodemPacket(t, packetNo, payload);
         }
-        function buildYmodemHeaderPacket(finalPacket = false) {
-          const p = iapProtocol(),
-            payload = new Uint8Array(p.block);
+        function buildYmodemHeaderPacket(t, finalPacket = false) {
+          const payload = new Uint8Array(t.block);
           if (!finalPacket) {
-            const name = ymodemFileNameBytes(),
-              size = asciiBytes(String(app.iapFileBytes.length), 16);
+            const name = ymodemFileNameBytes(t),
+              size = asciiBytes(String(t.rawSize), 16);
             payload.set(name, 0);
             payload[name.length] = 0;
             payload.set(size, name.length + 1);
           }
-          return buildXYmodemPacket(0, payload);
+          return buildXYmodemPacket(t, 0, payload);
         }
         async function requestIapOptionOnce(
           label = "IAP_CMD_GET_OPTION_BYTES",
           retries = 1,
+          transferInput = null,
         ) {
+          const beforeGeneration = app.iapOptionGeneration;
           for (let i = 0; i < retries; i++) {
+            if (transferInput && !isIapOperationActive(transferInput)) return false;
             app.iapOptionAttempts += 1;
             const res = await requestIapFrame(
               `${label} #${app.iapOptionAttempts}`,
               IAP_CMD_GET_OPTION_BYTES,
               new Uint8Array(),
               2200,
+              transferInput,
             );
-            if (res && app.iapAppSize != null && app.iapBootState != null)
-              return true;
-            if (i + 1 < retries) await sleep(350);
+            if (transferInput && !isIapOperationActive(transferInput)) return false;
+            if (
+              res &&
+              res.option &&
+              res.option.generation > beforeGeneration
+            )
+              return res.option;
+            if (i + 1 < retries) {
+              await sleep(350);
+              if (transferInput && !isIapOperationActive(transferInput))
+                return false;
+            }
           }
           return false;
         }
-        async function setIapBootState(state, opt = {}) {
+        async function setIapBootState(
+          state,
+          opt = {},
+          transferInput = null,
+        ) {
           const needConfirm = opt.confirm !== false,
             failOnReject = opt.failOnReject !== false,
             confirmDelay = opt.confirmDelay == null ? 300 : opt.confirmDelay;
+          if (transferInput && !isIapOperationActive(transferInput)) return false;
           const res = await requestIapFrame(
             `IAP_CMD_SET_BOOT_STATE ${bootStateName(state)}`,
             IAP_CMD_SET_BOOT_STATE,
             new Uint8Array([state & 255]),
             2200,
+            transferInput,
           );
+          if (transferInput && !isIapOperationActive(transferInput)) return false;
           if (!res || !res.p || !res.p.length || (res.p[0] & 255) !== 0x01) {
             if (failOnReject)
-              failIapDownload(`设置 ${bootStateName(state)} 失败`);
+              failIapDownload(
+                `设置 ${bootStateName(state)} 失败`,
+                transferInput,
+              );
             return false;
           }
           if (!needConfirm) return true;
           await sleep(confirmDelay);
-          if (!(await requestIapOptionOnce("IAP_CMD_GET_OPTION_BYTES(状态确认)"))) {
-            failIapDownload("BOOT_State 设置后未能重新读取 option bytes");
+          if (transferInput && !isIapOperationActive(transferInput)) return false;
+          if (
+            !(await requestIapOptionOnce(
+              "IAP_CMD_GET_OPTION_BYTES(状态确认)",
+              1,
+              transferInput,
+            ))
+          ) {
+            if (transferInput && !isIapOperationActive(transferInput)) return false;
+            failIapDownload(
+              "BOOT_State 设置后未能重新读取 option bytes",
+              transferInput,
+            );
             return false;
           }
           return true;
         }
-        async function ensureIapAck(failOnMissing = true, force = false) {
+        function isIapOperationActive(transferInput) {
+          return (
+            !!transferInput &&
+            transferInput.operationGeneration === app.iapOperationGeneration &&
+            app.iapBusy &&
+            app.iap
+          );
+        }
+        function isIapCommandContextActive(context) {
+          if (!context) return true;
+          if (context.pollGeneration != null) {
+            return (
+              context.pollGeneration === app.iapPollGeneration &&
+              context.operationGeneration === app.iapOperationGeneration &&
+              app.iap &&
+              !app.iapBusy &&
+              !app.iapCanceling
+            );
+          }
+          return isIapOperationActive(context);
+        }
+        /* 在文件流开始前独立下发长度和CRC32，防止Xmodem提前EOT确认截断镜像。 */
+        async function setIapTransferInfo(transferInput) {
+          const payload = new Uint8Array(8),
+            view = new DataView(payload.buffer);
+          view.setUint32(0, transferInput.total >>> 0, true);
+          view.setUint32(4, transferInput.localCrc32 >>> 0, true);
+          const res = await requestIapFrame(
+            "IAP_CMD_SET_TRANSFER_INFO",
+            IAP_CMD_SET_TRANSFER_INFO,
+            payload,
+            2200,
+            transferInput,
+          );
+          if (!isIapOperationActive(transferInput)) return false;
+          const ok = !!(
+            res &&
+            res.p &&
+            res.p.length &&
+            (res.p[0] & 255) === 0x01
+          );
+          if (!ok) {
+            failIapDownload("设备拒绝升级长度/CRC32清单", transferInput);
+            return false;
+          }
+          addIapLog(
+            `升级清单已确认：SIZE=${fmtBytes(transferInput.total)} CRC32=${hex32(transferInput.localCrc32)}`,
+          );
+          return true;
+        }
+        async function ensureIapAck(
+          failOnMissing = true,
+          force = false,
+          transferInput = null,
+        ) {
           if (app.iapConnected && !force) return true;
+          if (transferInput && !isIapOperationActive(transferInput)) return false;
           const res = await requestIapFrame(
             "IAP_CMD_GET_ACK",
             IAP_CMD_GET_ACK,
             new Uint8Array(),
             2200,
+            transferInput,
           );
+          if (transferInput && !isIapOperationActive(transferInput)) return false;
           const ok = !!(res && res.p && res.p.length && (res.p[0] & 255) === 0x01);
           app.iapConnected = ok;
           if (ok) stopIapOptionPoll();
           if (!ok && failOnMissing)
-            failIapDownload("GET_ACK 未响应，设备未进入 IAP 通道");
+            failIapDownload(
+              "GET_ACK 未响应，设备未进入 IAP 通道",
+              transferInput,
+            );
           return ok;
         }
-        async function waitIapBootloaderAfterAppRequest() {
+        async function waitIapBootloaderAfterAppRequest(transferInput) {
           app.iapConnected = false;
           app.iapBootState = null;
           app.iapAppSize = null;
@@ -3267,6 +3630,7 @@
           renderIap();
           addIapLog("APP 已接受升级请求，等待复位进入 BootLoader 下载窗口");
           await sleep(1600);
+          if (!isIapOperationActive(transferInput)) return false;
           app.iapConnected = false;
           app.iapBootState = BOOT_STATE.APP_UPDATA;
           app.iapDownloadState = "等待设备发送 Xmodem 请求";
@@ -3274,56 +3638,80 @@
           renderIap();
           return true;
         }
-        async function prepareIapXmodemDownload() {
+        async function prepareIapXmodemDownload(transferInput) {
           stopIapAckPoll();
           stopIapOptionPoll();
           clearIapWaiters();
           app.iapDownloadState = "准备 IAP 下载流程";
           renderIap();
-          const cachedReq = getCachedXmodemRequest();
-          if (cachedReq != null) {
-            stopIapAckPoll();
-            stopIapOptionPoll();
-            app.iapConnected = false;
-            app.iapBootState = BOOT_STATE.APP_UPDATA;
-            addIapLog(
-              `已收到设备 ${controlName(cachedReq)} 请求，跳过 IAP 探测命令，直接进入 Xmodem 传输`,
-            );
-            return true;
-          }
-          if (!(await ensureIapAck(true, true))) return false;
+          if (!(await ensureIapAck(true, true, transferInput))) return false;
+          if (!isIapOperationActive(transferInput)) return false;
           addIapLog("下载前重新读取 option bytes，避免复用上一轮升级状态");
-          if (!(await requestIapOptionOnce("IAP_CMD_GET_OPTION_BYTES(下载前确认)"))) {
-            failIapDownload("下载前未能读取 option bytes");
+          if (
+            !(await requestIapOptionOnce(
+              "IAP_CMD_GET_OPTION_BYTES(下载前确认)",
+              1,
+              transferInput,
+            ))
+          ) {
+            if (!isIapOperationActive(transferInput)) return false;
+            failIapDownload("下载前未能读取 option bytes", transferInput);
             return false;
           }
+          if (!isIapOperationActive(transferInput)) return false;
           if (app.iapBootState === BOOT_STATE.APP) {
             addIapLog("当前处于 APP，切换到 BOOT_STATE_APP_REQUEST_UPGRAD");
             if (
               !(await setIapBootState(BOOT_STATE.APP_REQUEST_UPGRAD, {
                 confirm: false,
                 failOnReject: false,
-              }))
+              }, transferInput))
             ) {
+              if (!isIapOperationActive(transferInput)) return false;
               addIapLog("APP_REQUEST_UPGRAD 未被当前状态接受，重新读取状态");
-              if (!(await requestIapOptionOnce("IAP_CMD_GET_OPTION_BYTES(失败后确认)"))) {
-                failIapDownload("设置 APP_REQUEST_UPGRAD 失败且无法读取状态");
+              if (
+                !(await requestIapOptionOnce(
+                  "IAP_CMD_GET_OPTION_BYTES(失败后确认)",
+                  1,
+                  transferInput,
+                ))
+              ) {
+                if (!isIapOperationActive(transferInput)) return false;
+                failIapDownload(
+                  "设置 APP_REQUEST_UPGRAD 失败且无法读取状态",
+                  transferInput,
+                );
                 return false;
               }
+              if (!isIapOperationActive(transferInput)) return false;
               if (app.iapBootState === BOOT_STATE.APP) {
-                failIapDownload("设置 APP_REQUEST_UPGRAD 失败，设备仍处于 APP");
+                failIapDownload(
+                  "设置 APP_REQUEST_UPGRAD 失败，设备仍处于 APP",
+                  transferInput,
+                );
                 return false;
               }
-            } else if (!(await waitIapBootloaderAfterAppRequest())) return false;
+            } else if (!(await waitIapBootloaderAfterAppRequest(transferInput)))
+              return false;
           }
+          if (!isIapOperationActive(transferInput)) return false;
           if (app.iapBootState !== BOOT_STATE.APP_UPDATA) {
             addIapLog("切换到 BOOT_STATE_APP_UPDATA，等待设备请求 Xmodem 数据");
-            if (!(await setIapBootState(BOOT_STATE.APP_UPDATA, { confirm: false })))
+            if (
+              !(await setIapBootState(
+                BOOT_STATE.APP_UPDATA,
+                { confirm: false },
+                transferInput,
+              ))
+            )
               return false;
+            if (!isIapOperationActive(transferInput)) return false;
             app.iapConnected = false;
             app.iapBootState = BOOT_STATE.APP_UPDATA;
             await sleep(300);
+            if (!isIapOperationActive(transferInput)) return false;
           }
+          if (!(await setIapTransferInfo(transferInput))) return false;
           return true;
         }
         function controlName(b) {
@@ -3337,14 +3725,21 @@
                   ? "CAN"
                   : `0x${(b & 255).toString(16).toUpperCase().padStart(2, "0")}`;
         }
-        function retryXmodemPacket(reason) {
-          const t = app.iapTransfer;
-          if (!t || !t.active) return;
+        function isCurrentIapTransfer(t) {
+          return (
+            !!t &&
+            t.active &&
+            app.iapTransfer === t &&
+            isIapOperationActive(t)
+          );
+        }
+        function retryXmodemPacket(reason, t = app.iapTransfer) {
+          if (!isCurrentIapTransfer(t)) return;
           const retryPhase = t.phase;
           clearIapTransferTimers(t);
           t.retries += 1;
           if (t.retries >= 5) {
-            failIapDownload(`${reason}超过 5 次，下载失败`);
+            failIapDownload(`${reason}超过 5 次，下载失败`, t);
             return;
           }
           const retryText =
@@ -3361,68 +3756,72 @@
           addIapLog(`${reason}，${XMODEM_RETRY_DELAY_MS}ms 后重发${retryText}`);
           t.phase = "retry-delay";
           t.delayTimer = setTimeout(() => {
-            if (retryPhase === "wait-header-ack") sendYmodemHeaderPacket(false);
-            else if (retryPhase === "wait-eot-ack") sendXmodemEot();
+            if (!isCurrentIapTransfer(t)) return;
+            if (retryPhase === "wait-header-ack")
+              sendYmodemHeaderPacket(false, t);
+            else if (retryPhase === "wait-eot-ack") sendXmodemEot(t);
             else if (
               retryPhase === "wait-final-request" ||
               retryPhase === "wait-final-ack"
             )
-              sendYmodemHeaderPacket(true);
-            else sendXmodemCurrentPacket();
+              sendYmodemHeaderPacket(true, t);
+            else sendXmodemCurrentPacket(t);
           }, XMODEM_RETRY_DELAY_MS);
         }
-        function armXmodemPacketTimeout() {
-          const t = app.iapTransfer;
-          if (!t || !t.active) return;
+        function armXmodemPacketTimeout(t = app.iapTransfer) {
+          if (!isCurrentIapTransfer(t)) return;
           if (t.timeoutTimer) clearTimeout(t.timeoutTimer);
           t.timeoutTimer = setTimeout(() => {
-            retryXmodemPacket("等待 ACK/NAK/CAN 超时");
+            retryXmodemPacket("等待 ACK/NAK/CAN 超时", t);
           }, 5000);
         }
-        async function sendYmodemHeaderPacket(finalPacket = false) {
-          const t = app.iapTransfer;
-          if (!t || !t.active) return;
+        async function sendYmodemHeaderPacket(
+          finalPacket = false,
+          t = app.iapTransfer,
+        ) {
+          if (!isCurrentIapTransfer(t)) return;
           clearIapTransferTimers(t);
           t.phase = finalPacket ? "wait-final-ack" : "wait-header-ack";
-          const packet = buildYmodemHeaderPacket(finalPacket),
+          const packet = buildYmodemHeaderPacket(t, finalPacket),
             label = finalPacket ? "Ymodem 结束空包" : "Ymodem 文件信息包",
-            ok = await writeIapStream(packet, label);
-          if (!ok) return;
+            ok = await writeIapStream(packet, label, t);
+          if (!ok || !isCurrentIapTransfer(t)) return;
           app.iapDownloadState = finalPacket
             ? "已发送 Ymodem 结束空包，等待 ACK"
             : "已发送 Ymodem 文件信息包，等待 ACK";
-          armXmodemPacketTimeout();
+          armXmodemPacketTimeout(t);
           renderIap();
         }
-        async function sendXmodemCurrentPacket() {
-          const t = app.iapTransfer;
-          if (!t || !t.active) return;
+        async function sendXmodemCurrentPacket(t = app.iapTransfer) {
+          if (!isCurrentIapTransfer(t)) return;
           clearIapTransferTimers(t);
           t.phase = "wait-ack";
           t.firstPacketSent = true;
-          const packet = buildXmodemPacket(t.packetNo),
+          const packet = buildXmodemPacket(t, t.packetNo),
             ok = await writeIapStream(
               packet,
               `${t.ymodem ? "Ymodem" : "Xmodem"} 第 ${t.packetNo}/${t.packetCount} 包`,
+              t,
             );
-          if (!ok) return;
+          if (!ok || !isCurrentIapTransfer(t)) return;
           app.iapDownloadState = `已发送第 ${t.packetNo}/${t.packetCount} 包，等待设备确认`;
-          armXmodemPacketTimeout();
+          armXmodemPacketTimeout(t);
           renderIap();
         }
-        function handleXmodemAck() {
-          const t = app.iapTransfer;
-          if (!t || !t.active) return;
+        function handleXmodemAck(t = app.iapTransfer) {
+          if (!isCurrentIapTransfer(t)) return;
           clearIapTransferTimers(t);
           const confirmed = Math.min(t.packetNo * t.block, t.total);
           app.iapProgress = t.total ? (confirmed / t.total) * 100 : 100;
           app.iapRemainBytes = Math.max(0, t.total - confirmed);
           if (t.packetNo >= t.packetCount) {
+            /* 数据包与结束握手分别计数，最后一包的重试不能挤占EOT阶段容错。 */
+            t.retries = 0;
             t.phase = "send-eot";
             app.iapDownloadState = `文件数据发送完成，${XMODEM_EOT_DELAY_MS}ms 后发送 EOT`;
             addIapLog("最后一包已 ACK，准备发送 EOT");
             t.delayTimer = setTimeout(() => {
-              sendXmodemEot();
+              sendXmodemEot(t);
             }, XMODEM_EOT_DELAY_MS);
           } else {
             t.packetNo += 1;
@@ -3430,100 +3829,80 @@
             t.phase = "next-delay";
             app.iapDownloadState = `第 ${t.packetNo - 1} 包已 ACK，${XMODEM_NEXT_PACKET_DELAY_MS}ms 后发送下一包`;
             t.delayTimer = setTimeout(() => {
-              sendXmodemCurrentPacket();
+              sendXmodemCurrentPacket(t);
             }, XMODEM_NEXT_PACKET_DELAY_MS);
           }
           renderIap();
         }
-        async function sendXmodemEot() {
-          const t = app.iapTransfer;
-          if (!t || !t.active) return;
+        async function sendXmodemEot(t = app.iapTransfer) {
+          if (!isCurrentIapTransfer(t)) return;
           clearIapTransferTimers(t);
-          const ok = await writeIapStream(new Uint8Array([XMODEM_CMD_EOT]), "Xmodem EOT");
-          if (!ok) return;
-          if (t.ymodem) {
-            t.phase = "wait-eot-ack";
-            app.iapDownloadState = "已发送 EOT，等待设备 ACK";
-            armXmodemPacketTimeout();
-            renderIap();
-            return;
-          }
-          await completeIapDownload();
+          /* Xmodem 与 Ymodem 均以设备 ACK 作为 EOT 成功条件，阶段必须在写串口前设置。 */
+          t.phase = "wait-eot-ack";
+          const ok = await writeIapStream(
+            new Uint8Array([XMODEM_CMD_EOT]),
+            "Xmodem EOT",
+            t,
+          );
+          if (!ok || !isCurrentIapTransfer(t)) return;
+          app.iapDownloadState = "已发送 EOT，等待设备 ACK";
+          armXmodemPacketTimeout(t);
+          renderIap();
         }
-        async function completeIapDownload() {
-          const t = app.iapTransfer;
-          if (t) {
-            t.active = false;
-            clearIapTransferTimers(t);
-          }
-          app.iapTransfer = null;
-          clearCachedXmodemRequest();
+        async function completeIapDownload(t = app.iapTransfer) {
+          if (!isCurrentIapTransfer(t)) return;
+          t.active = false;
+          clearIapTransferTimers(t);
           app.iapProgress = 100;
           app.iapRemainBytes = 0;
           app.iapDownloadState = "下载完成，正在重新读取 option bytes";
           renderIap();
           await sleep(800);
+          /* 只允许本轮仍有效的异步流程读取并确认升级结果。 */
+          if (
+            app.iapTransfer !== t ||
+            app.iapOperationGeneration !== t.operationGeneration ||
+            !app.iapBusy
+          )
+            return;
           const refreshed = await requestIapOptionOnce(
             "IAP_CMD_GET_OPTION_BYTES(完成校验)",
             5,
+            t,
           );
-          if (refreshed) {
-            const localCrc = crc32(app.iapTxBytes),
-              crcOk = app.iapAppCrc32 === localCrc,
-              sizeOk = app.iapAppSize === app.iapTxBytes.length;
-            app.iapDownloadState =
-              crcOk && sizeOk
-                ? "下载完成，APP_SIZE / APP_CRC32 校验通过"
-                : crcOk
-                  ? "下载完成，APP_CRC32 校验通过，APP_SIZE 与本地传输大小不同"
-                  : "下载完成，APP_CRC32 与本地计算值不一致";
-            toast(crcOk ? "IAP下载完成" : "IAP下载完成，CRC-32不一致");
-            addIapLog(
-              `完成校验：本地 SIZE=${fmtBytes(app.iapTxBytes.length)} CRC32=${hex32(localCrc)}，设备 SIZE=${fmtBytes(app.iapAppSize)} CRC32=${hex32(app.iapAppCrc32)}`,
-            );
-          } else {
-            app.iapDownloadState = "下载完成，未读取到完成后的 option bytes";
-            toast("IAP下载完成，未读取到完成校验");
-          }
-          renderIap();
-        }
-        function clearCachedXmodemRequest() {
-          app.iapLastXmodemRequest = null;
-          app.iapLastXmodemRequestTs = 0;
-        }
-        function getCachedXmodemRequest(maxAge = 8000) {
-          const b = app.iapLastXmodemRequest;
-          if (app.iapBootState !== BOOT_STATE.APP_UPDATA) {
-            clearCachedXmodemRequest();
-            return null;
-          }
           if (
-            (b === XMODEM_CMD_NAK || b === XMODEM_CMD_NAK_CRC) &&
-            Date.now() - app.iapLastXmodemRequestTs <= maxAge
+            app.iapTransfer !== t ||
+            app.iapOperationGeneration !== t.operationGeneration ||
+            !app.iapBusy
           )
-            return b;
-          clearCachedXmodemRequest();
-          return null;
-        }
-        function captureXmodemRequest(bytes) {
-          if (!bytes || !bytes.length) return;
-          const transfer = app.iapTransfer;
-          if (transfer && transfer.active) return;
-          for (let i = 0; i < bytes.length; i++) {
-            const b = bytes[i] & 255;
-            if (b !== XMODEM_CMD_NAK && b !== XMODEM_CMD_NAK_CRC) continue;
-            applyIapCheckByRequest(b);
-            app.iapLastXmodemRequest = b;
-            app.iapLastXmodemRequestTs = Date.now();
-            if (app.iap && !app.iapTransfer) {
-              stopIapAckPoll();
-              stopIapOptionPoll();
-              app.iapBootState = BOOT_STATE.APP_UPDATA;
-              app.iapConnected = false;
-              app.iapDownloadState = `已检测到设备 Xmodem 请求 ${controlName(b)}`;
-              renderIap();
-            }
+            return;
+          let success = false;
+          if (refreshed) {
+            const keyOk = refreshed.appKey === IAP_APP_READY_KEY,
+              sizeOk = refreshed.appSize === t.total,
+              crcOk = refreshed.appCrc32 === t.localCrc32,
+              stateOk = [
+                BOOT_STATE.APP_UPDATA_READY,
+                BOOT_STATE.READY,
+                BOOT_STATE.JUMP_APP,
+                BOOT_STATE.APP,
+              ].includes(refreshed.bootState);
+            success = keyOk && sizeOk && crcOk && stateOk;
+            addIapLog(
+              `完成校验：本地 SIZE=${fmtBytes(t.total)} CRC32=${hex32(t.localCrc32)}，设备 KEY=${hex32(refreshed.appKey)} STATE=${bootStateName(refreshed.bootState)} SIZE=${fmtBytes(refreshed.appSize)} CRC32=${hex32(refreshed.appCrc32)}`,
+            );
+            app.iapDownloadState = success
+              ? "下载完成，APP_KEY / BOOT_State / APP_SIZE / APP_CRC32 校验通过"
+              : "升级数据已发送，但设备完成校验未通过";
+          } else {
+            app.iapDownloadState = "升级数据已发送，但未读取到本轮完成后的 option bytes";
           }
+          app.iapTransfer = null;
+          app.iapBusy = false;
+          /* 正常完成只废弃本轮异步回调，不向已完成的设备发送取消字符。 */
+          app.iapOperationGeneration += 1;
+          toast(success ? "IAP下载完成，设备校验通过" : "IAP升级未通过设备完成校验");
+          renderIap();
         }
         function feedXmodemControl(bytes) {
           const t = app.iapTransfer;
@@ -3538,7 +3917,7 @@
             )
               continue;
             if (b === XMODEM_CMD_CAN) {
-              failIapDownload("设备发送 CAN，下载已取消");
+              failIapDownload("设备发送 CAN，下载已取消", t);
               return;
             }
             if (t.phase === "wait-request") {
@@ -3546,10 +3925,10 @@
                 applyIapCheckByRequest(b);
                 if (t.ymodem) {
                   addIapLog(`收到 ${controlName(b)}，开始发送 Ymodem 文件信息包`);
-                  sendYmodemHeaderPacket(false);
+                  sendYmodemHeaderPacket(false, t);
                 } else {
                   addIapLog(`收到 ${controlName(b)}，开始发送第一包`);
-                  sendXmodemCurrentPacket();
+                  sendXmodemCurrentPacket(t);
                 }
                 return;
               }
@@ -3562,12 +3941,15 @@
                 t.phase = "wait-header-c";
                 app.iapDownloadState = "Ymodem 文件信息包已 ACK，等待设备请求文件数据";
                 addIapLog("Ymodem 文件信息包收到 ACK，等待设备请求 C");
-                armXmodemPacketTimeout();
+                armXmodemPacketTimeout(t);
                 renderIap();
                 continue;
               }
               if (b === XMODEM_CMD_NAK || b === XMODEM_CMD_NAK_CRC) {
-                retryXmodemPacket(`Ymodem 文件信息包收到 ${controlName(b)}`);
+                retryXmodemPacket(
+                  `Ymodem 文件信息包收到 ${controlName(b)}`,
+                  t,
+                );
                 return;
               }
               continue;
@@ -3578,7 +3960,7 @@
                 clearIapTransferTimers(t);
                 t.retries = 0;
                 addIapLog(`收到 ${controlName(b)}，开始发送第一包`);
-                sendXmodemCurrentPacket();
+                sendXmodemCurrentPacket(t);
                 return;
               }
               continue;
@@ -3587,15 +3969,21 @@
               if (b === XMODEM_CMD_ACK) {
                 clearIapTransferTimers(t);
                 t.retries = 0;
-                t.phase = "wait-final-request";
-                app.iapDownloadState = "EOT 已 ACK，等待设备请求 Ymodem 结束空包";
-                addIapLog("EOT 收到 ACK，等待设备请求 C");
-                armXmodemPacketTimeout();
-                renderIap();
+                if (t.ymodem) {
+                  t.phase = "wait-final-request";
+                  app.iapDownloadState = "EOT 已 ACK，等待设备请求 Ymodem 结束空包";
+                  addIapLog("EOT 收到 ACK，等待设备请求 C");
+                   armXmodemPacketTimeout(t);
+                  renderIap();
+                } else {
+                  addIapLog("Xmodem EOT 收到 ACK，开始设备完成校验");
+                   void completeIapDownload(t);
+                  return;
+                }
                 continue;
               }
               if (b === XMODEM_CMD_NAK) {
-                retryXmodemPacket("EOT 收到 NAK");
+                retryXmodemPacket("EOT 收到 NAK", t);
                 return;
               }
               continue;
@@ -3606,7 +3994,7 @@
                 clearIapTransferTimers(t);
                 t.retries = 0;
                 addIapLog(`收到 ${controlName(b)}，发送 Ymodem 结束空包`);
-                sendYmodemHeaderPacket(true);
+                sendYmodemHeaderPacket(true, t);
                 return;
               }
               continue;
@@ -3614,11 +4002,14 @@
             if (t.phase === "wait-final-ack") {
               if (b === XMODEM_CMD_ACK) {
                 addIapLog("Ymodem 结束空包收到 ACK");
-                void completeIapDownload();
+                void completeIapDownload(t);
                 return;
               }
               if (b === XMODEM_CMD_NAK || b === XMODEM_CMD_NAK_CRC) {
-                retryXmodemPacket(`Ymodem 结束空包收到 ${controlName(b)}`);
+                retryXmodemPacket(
+                  `Ymodem 结束空包收到 ${controlName(b)}`,
+                  t,
+                );
                 return;
               }
               continue;
@@ -3626,10 +4017,13 @@
             if (t.phase !== "wait-ack") continue;
             if (b === XMODEM_CMD_ACK) {
               addIapLog(`第 ${t.packetNo} 包收到 ACK`);
-              handleXmodemAck();
+              handleXmodemAck(t);
               return;
             } else if (b === XMODEM_CMD_NAK) {
-              retryXmodemPacket(`第 ${t.packetNo} 包收到 ${controlName(b)}`);
+              retryXmodemPacket(
+                `第 ${t.packetNo} 包收到 ${controlName(b)}`,
+                t,
+              );
               return;
             } else if (b === XMODEM_CMD_NAK_CRC) {
               if (Date.now() - t.lastMismatchLog > 1000) {
@@ -3640,17 +4034,28 @@
             }
           }
         }
-        function beginXmodemTransfer() {
-          const p = iapProtocol(),
-            total = app.iapTxBytes.length,
-            packetCount = Math.ceil(total / p.block);
+        function beginXmodemTransfer(transferInput) {
+          if (
+            transferInput.operationGeneration !== app.iapOperationGeneration ||
+            !app.iapBusy
+          )
+            return;
           app.iapCheck = "auto";
-          app.iapTransfer = {
+          /* 固化本轮协议、文件内容和校验值，传输期间不再读取可变的界面字段。 */
+          const t = {
             active: true,
-            block: p.block,
-            ymodem: p.ymodem,
-            total,
-            packetCount,
+            operationGeneration: transferInput.operationGeneration,
+            block: transferInput.block,
+            ymodem: transferInput.ymodem,
+            protocolName: transferInput.protocolName,
+            protocolKey: transferInput.protocolKey,
+            txBytes: transferInput.txBytes,
+            rawSize: transferInput.rawSize,
+            fileName: transferInput.fileName,
+            localCrc32: transferInput.localCrc32,
+            checkMode: "auto",
+            total: transferInput.total,
+            packetCount: transferInput.packetCount,
             packetNo: 1,
             retries: 0,
             phase: "wait-request",
@@ -3659,30 +4064,41 @@
             firstPacketSent: false,
             lastMismatchLog: 0,
           };
+          app.iapTransfer = t;
           app.iapProgress = 0;
-          app.iapRemainBytes = total;
+          app.iapRemainBytes = transferInput.total;
           app.iapDownloadState = "等待设备请求数据（自动识别 C/NAK）";
           addIapLog(
-            `开始 ${p.ymodem ? "Ymodem" : "Xmodem"} 下载：${p.name} / 校验模式自动识别 / ${packetCount} 包 / ${fmtBytes(total)}`,
+            `开始 ${transferInput.ymodem ? "Ymodem" : "Xmodem"} 下载：${transferInput.protocolName} / 校验模式自动识别 / ${transferInput.packetCount} 包 / ${fmtBytes(transferInput.total)}`,
           );
-          app.iapTransfer.timeoutTimer = setTimeout(() => {
-            failIapDownload("等待设备 XYmodem 请求数据超时");
+          t.timeoutTimer = setTimeout(() => {
+            failIapDownload("等待设备 XYmodem 请求数据超时", t);
           }, 10000);
           renderIap();
-          const cachedReq = getCachedXmodemRequest();
-          if (cachedReq != null) {
-            app.iapLastXmodemRequest = null;
-            app.iapLastXmodemRequestTs = 0;
-            feedXmodemControl(new Uint8Array([cachedReq]));
-          }
         }
         async function startIapTestProgram(reason = "测试演示") {
-          if (!app.iapTxBytes) await chooseIapFile(createDemoBin());
+          if (
+            app.iapBusy ||
+            app.iapCanceling ||
+            (app.iapTransfer && app.iapTransfer.active)
+          ) {
+            toast("IAP任务正在进行，请勿重复启动");
+            return;
+          }
+          if (!app.iapTxBytes) {
+            const selected = await chooseIapFile(createDemoBin());
+            if (!selected || !app.iap) return;
+          }
           if (!app.iapTxBytes) {
             toast("文件未选择");
             return;
           }
-          stopIapDownload();
+          /* 演示期间暂停设备轮询并锁定配置，避免 GET_ACK 把演示完成状态覆盖。 */
+          stopIapAckPoll();
+          stopIapOptionPoll();
+          clearIapWaiters();
+          stopIapDownload(false);
+          app.iapBusy = true;
           const total = app.iapTxBytes.length;
           let sent = 0;
           app.iapProgress = 0;
@@ -3697,7 +4113,7 @@
             app.iapProgress = total ? (sent / total) * 100 : 100;
             app.iapRemainBytes = Math.max(0, total - sent);
             if (sent >= total) {
-              stopIapDownload();
+              stopIapDownload(false);
               app.iapDownloadState = `${reason}完成`;
               addIapLog(`${reason}完成，进度条和剩余字节已归零`);
               toast(`${reason}完成`);
@@ -3708,15 +4124,16 @@
           renderIap();
         }
         async function startIapDownload() {
-          const proto = iapProtocol();
-          if (!app.iapTxBytes) {
-            toast("文件未选择");
+          if (
+            app.iapBusy ||
+            app.iapCanceling ||
+            (app.iapTransfer && app.iapTransfer.active)
+          ) {
+            toast("IAP升级正在进行，请勿重复启动");
             return;
           }
-          if (app.iapTxBytes.length > IAP_APP_MAX_SIZE) {
-            failIapDownload(
-              `APP镜像超过TD66S_T IAP区域：${fmtBytes(app.iapTxBytes.length)} > ${fmtBytes(IAP_APP_MAX_SIZE)}`,
-            );
+          if (!app.iapFile || !app.iapFileBytes || !app.iapTxBytes) {
+            toast("文件未选择");
             return;
           }
           if (!app.isConnected || !app.writer) {
@@ -3725,16 +4142,44 @@
             renderIap();
             return;
           }
-          stopIapDownload();
+          stopIapDownload(false);
+          const operationGeneration = ++app.iapOperationGeneration;
+          app.iapBusy = true;
+          /* 点击下载时一次性固化协议、文件和校验值，后续异步准备流程只使用该快照。 */
+          const protocolKey = app.iapProtocol,
+            proto = IAP_PROTOCOLS[protocolKey] || IAP_PROTOCOLS["ymodem-1k"],
+            txBytes = app.iapTxBytes.slice(),
+            total = txBytes.length,
+            transferInput = Object.freeze({
+              operationGeneration,
+              block: proto.block,
+              ymodem: proto.ymodem,
+              protocolName: proto.name,
+              protocolKey,
+              txBytes,
+              rawSize: app.iapFileBytes.length,
+              fileName: app.iapFile.name || "H20_APP.bin",
+              localCrc32: crc32(txBytes),
+              total,
+              packetCount: Math.ceil(total / proto.block),
+            });
+          if (transferInput.total > IAP_APP_MAX_SIZE) {
+            failIapDownload(
+              `APP镜像超过H20 IAP区域：${fmtBytes(transferInput.total)} > ${fmtBytes(IAP_APP_MAX_SIZE)}`,
+              transferInput,
+            );
+            return;
+          }
           app.iapProgress = 0;
-          app.iapRemainBytes = app.iapTxBytes.length;
+          app.iapRemainBytes = transferInput.total;
           app.iapDownloadState = "准备下载";
           addIapLog(
-            `下载请求：${proto.name} / 校验模式自动识别 / ${fmtBytes(app.iapTxBytes.length)}`,
+            `下载请求：${transferInput.protocolName} / 校验模式自动识别 / ${fmtBytes(transferInput.total)}`,
           );
           renderIap();
-          if (!(await prepareIapXmodemDownload())) return;
-          beginXmodemTransfer();
+          if (!(await prepareIapXmodemDownload(transferInput))) return;
+          if (!isIapOperationActive(transferInput)) return;
+          beginXmodemTransfer(transferInput);
         }
         function iapMode(on, backToDev = true) {
           app.iap = on;
@@ -3798,7 +4243,6 @@
           app.rxFrameLen = 0;
           app.rxFrameLastTs = 0;
           addLog("接收", out);
-          if (app.iap) feedIap(out);
         }
         function resetRxFrame(discard = true) {
           clearRxFrameTimer();
@@ -3905,13 +4349,44 @@
           }
           app.lastCmdNano = nano();
         }
-        async function qwrite(bytes, th = false) {
+        async function qwrite(
+          bytes,
+          th = false,
+          generation = app.serialGeneration,
+          writer = app.writer,
+          operationGeneration = null,
+        ) {
+          const payload =
+              bytes instanceof Uint8Array
+                ? bytes.slice()
+                : new Uint8Array(bytes || []);
+          if (!writer) throw new Error("writer missing");
           app.writeQ = app.writeQ
             .catch(() => undefined)
             .then(async () => {
-              if (!app.writer) throw new Error("writer missing");
+              if (
+                generation !== app.serialGeneration ||
+                writer !== app.writer ||
+                (operationGeneration != null &&
+                  operationGeneration !== app.iapOperationGeneration)
+              )
+                throw new Error("stale serial write");
               if (th) await throttle();
-              await app.writer.write(bytes);
+              if (
+                generation !== app.serialGeneration ||
+                writer !== app.writer ||
+                (operationGeneration != null &&
+                  operationGeneration !== app.iapOperationGeneration)
+              )
+                throw new Error("stale serial write");
+              await writer.write(payload);
+              if (
+                generation !== app.serialGeneration ||
+                writer !== app.writer ||
+                (operationGeneration != null &&
+                  operationGeneration !== app.iapOperationGeneration)
+              )
+                throw new Error("stale serial write");
             });
           return app.writeQ;
         }
@@ -4433,6 +4908,10 @@
         }
         function feedIap(bytes) {
           if (!bytes || !bytes.length) return;
+          if (!app.iap || app.iapCanceling) {
+            app.bufIap.length = 0;
+            return;
+          }
           bufAdd(app.bufIap, bytes);
           extractIap(app.bufIap).forEach(([c, p]) => dispatchIapFrame(c, p));
         }
@@ -4510,17 +4989,34 @@
             if (tip) toast("发送内容为空");
             return false;
           }
+          const writeGeneration = app.serialGeneration,
+            writeWriter = app.writer;
           try {
             let off = 0;
             while (off < payload.length) {
               const end = Math.min(off + 256, payload.length);
-              await qwrite(payload.slice(off, end), th);
+              await qwrite(
+                payload.slice(off, end),
+                th,
+                writeGeneration,
+                writeWriter,
+              );
+              if (
+                writeGeneration !== app.serialGeneration ||
+                writeWriter !== app.writer
+              )
+                return false;
               off = end;
             }
             addLog("发送", payload);
             if (tip) toast(msg || `已发送${payload.length}字节`);
             return true;
           } catch (_) {
+            if (
+              writeGeneration !== app.serialGeneration ||
+              writeWriter !== app.writer
+            )
+              return false;
             if (tip) toast("发送失败，请检查设备连接");
             await disconn("透传通道已断开，请重新连接");
             return false;
@@ -4534,15 +5030,32 @@
           if (!app.isConnected || !app.writer) return false;
           if (isIapSerialBusy()) return false;
           const p = pkt(cmd, data);
+          const writeGeneration = app.serialGeneration,
+            writeWriter = app.writer;
           try {
             let off = 0;
             while (off < p.length) {
               const end = Math.min(off + 256, p.length);
-              await qwrite(p.slice(off, end), true);
+              await qwrite(
+                p.slice(off, end),
+                true,
+                writeGeneration,
+                writeWriter,
+              );
+              if (
+                writeGeneration !== app.serialGeneration ||
+                writeWriter !== app.writer
+              )
+                return false;
               off = end;
             }
             return true;
           } catch (_) {
+            if (
+              writeGeneration !== app.serialGeneration ||
+              writeWriter !== app.writer
+            )
+              return false;
             await disconn("透传通道已断开，请重新连接");
             return false;
           }
@@ -4574,17 +5087,22 @@
         }
         async function readLoop() {
           if (!app.activePort || !app.activePort.readable) return;
+          const generation = app.serialGeneration,
+            reader = app.activePort.readable.getReader();
           app.readActive = true;
+          app.reader = reader;
           try {
-            app.reader = app.activePort.readable.getReader();
-            while (app.readActive) {
-              const { value, done } = await app.reader.read();
+            while (
+              app.readActive &&
+              generation === app.serialGeneration &&
+              app.reader === reader
+            ) {
+              const { value, done } = await reader.read();
               if (done) break;
               if (value && value.length) {
                 const c =
                   value instanceof Uint8Array ? value : new Uint8Array(value);
                 pushRxFrameChunk(c);
-                captureXmodemRequest(c);
                 feedXmodemControl(c);
                 feedIap(c);
                 feedTest(c);
@@ -4592,17 +5110,79 @@
               }
             }
           } catch (_) {
-            if (app.readActive)
+            if (
+              app.readActive &&
+              generation === app.serialGeneration &&
+              app.reader === reader
+            )
               await disconn("透传通道已断开，请重新连接");
           } finally {
-            if (app.reader) {
-              try {
-                app.reader.releaseLock();
-              } catch (_) {}
-            }
-            flushRxFrame();
-            app.reader = null;
+            try {
+              reader.releaseLock();
+            } catch (_) {}
+            /* 旧读取循环不得释放或清空重连后创建的新 reader。 */
+            if (generation === app.serialGeneration) flushRxFrame();
+            if (app.reader === reader) app.reader = null;
           }
+        }
+        function queueConnectionOperation(operation) {
+          /* 所有打开和清理操作共用串行队列，禁止旧清理跨越await关闭新连接。 */
+          const queued = app.connectionQ
+            .catch(() => undefined)
+            .then(operation);
+          app.connectionQ = queued.catch(() => undefined);
+          return queued;
+        }
+        async function cleanupConnectionNow(reset) {
+          /* 先推进串口代次并摘除全部旧对象，后续await只操作捕获的旧连接。 */
+          app.serialGeneration += 1;
+          const cleanupSerialGeneration = app.serialGeneration,
+            closingWriter = app.writer,
+            closingReader = app.reader,
+            closingPort = app.activePort,
+            pendingWriteQ = app.writeQ.catch(() => undefined);
+          app.writer = null;
+          app.reader = null;
+          app.activePort = null;
+          app.isConnected = false;
+          app.readActive = false;
+          stopIapAckPoll();
+          stopIapOptionPoll();
+          clearIapWaiters();
+          stopIapDownload();
+          flushRxFrame();
+          stopPoll();
+          stopTimed();
+          if (closingWriter) {
+            try {
+              if (typeof closingWriter.abort === "function")
+                await closingWriter.abort("serial cleanup");
+            } catch (_) {}
+            /* 等待旧写链收敛；超时后也不会跨代次写入新writer。 */
+            await Promise.race([pendingWriteQ, sleep(1500)]);
+            try {
+              closingWriter.releaseLock();
+            } catch (_) {}
+          }
+          if (closingReader) {
+            try {
+              await closingReader.cancel();
+            } catch (_) {}
+            try {
+              closingReader.releaseLock();
+            } catch (_) {}
+          }
+          if (closingPort) {
+            try {
+              await closingPort.close();
+            } catch (_) {}
+          }
+          if (cleanupSerialGeneration !== app.serialGeneration) return;
+          app.iapConnected = false;
+          app.lastCmdNano = 0;
+          app.writeQ = Promise.resolve();
+          if (reset) resetData();
+          updConnUI();
         }
         async function openSel(show = true) {
           if (!app.supported) {
@@ -4622,65 +5202,67 @@
             if (show) toast("未找到USB设备，无法连接");
             return false;
           }
-          if (app.activePort && app.activePort === p && app.writer) return true;
-          await cleanup(false);
-          try {
-            await p.open({
-              baudRate: app.baud,
-              dataBits: 8,
-              stopBits: 1,
-              parity: "none",
-              flowControl: "none",
-            });
-          } catch (_) {
-            if (show) toast("串口初始化失败，请检查设备类型与波特率");
-            return false;
-          }
-          app.activePort = p;
-          app.writer = p.writable ? p.writable.getWriter() : null;
-          app.isConnected = !!app.writer;
-          app.lastCmdNano = 0;
-          app.writeQ = Promise.resolve();
-          updConnUI();
-          if (!app.writer) {
-            if (show) toast("透传通道未就绪，请检查USB权限和串口");
-            return false;
-          }
-          readLoop();
-          startPoll();
-          return true;
+          const baud = app.baud;
+          return queueConnectionOperation(async () => {
+            if (app.activePort && app.activePort === p && app.writer) return true;
+            app.connectionGeneration += 1;
+            app.connectionBusy = true;
+            updConnUI();
+            try {
+              await cleanupConnectionNow(false);
+              try {
+                await p.open({
+                  baudRate: baud,
+                  dataBits: 8,
+                  stopBits: 1,
+                  parity: "none",
+                  flowControl: "none",
+                  /* 高波特率下扩大浏览器接收缓存，降低日志与协议响应同发时的丢帧概率。 */
+                  bufferSize: WEB_SERIAL_BUFFER_SIZE,
+                });
+              } catch (_) {
+                if (show) toast("串口初始化失败，请检查设备类型与波特率");
+                return false;
+              }
+              let openedWriter = null;
+              try {
+                openedWriter = p.writable ? p.writable.getWriter() : null;
+              } catch (_) {}
+              if (!openedWriter) {
+                try {
+                  await p.close();
+                } catch (_) {}
+                if (show) toast("透传通道未就绪，请检查USB权限和串口");
+                return false;
+              }
+              app.activePort = p;
+              app.writer = openedWriter;
+              app.isConnected = true;
+              app.lastCmdNano = 0;
+              app.writeQ = Promise.resolve();
+              updConnUI();
+              void readLoop();
+              if (app.iap) startIapAckPoll();
+              else startPoll();
+              return true;
+            } finally {
+              app.connectionBusy = false;
+              updConnUI();
+            }
+          });
         }
         async function cleanup(reset) {
-          app.readActive = false;
-          flushRxFrame();
-          stopPoll();
-          stopTimed();
-          if (app.reader) {
+          return queueConnectionOperation(async () => {
+            app.connectionGeneration += 1;
+            app.connectionBusy = true;
+            updConnUI();
             try {
-              await app.reader.cancel();
-            } catch (_) {}
-            try {
-              app.reader.releaseLock();
-            } catch (_) {}
-            app.reader = null;
-          }
-          if (app.writer) {
-            try {
-              app.writer.releaseLock();
-            } catch (_) {}
-            app.writer = null;
-          }
-          if (app.activePort) {
-            try {
-              await app.activePort.close();
-            } catch (_) {}
-            app.activePort = null;
-          }
-          app.isConnected = false;
-          app.lastCmdNano = 0;
-          app.writeQ = Promise.resolve();
-          if (reset) resetData();
-          updConnUI();
+              await cleanupConnectionNow(reset);
+            } finally {
+              app.connectionBusy = false;
+              updConnUI();
+            }
+          });
         }
         async function disconn(msg, reset = true) {
           await cleanup(reset);
@@ -5220,13 +5802,13 @@
             addIapLog(`传输协议已切换为 ${iapProtocol().name}`);
           };
           el.iapChooseFileBtn.onclick = () => el.iapFileInput.click();
-          el.iapFileInput.onchange = () => {
-            chooseIapFile(el.iapFileInput.files && el.iapFileInput.files[0]);
+          el.iapFileInput.onchange = async () => {
+            await chooseIapFile(el.iapFileInput.files && el.iapFileInput.files[0]);
           };
           el.iapDownloadBtn.onclick = () => startIapDownload();
           el.iapDemoBtn.onclick = async () => {
-            await chooseIapFile(createDemoBin());
-            startIapTestProgram("测试演示");
+            if (await chooseIapFile(createDemoBin()))
+              await startIapTestProgram("测试演示");
           };
           el.cancelAdminBtn.onclick = closeAdmin;
           el.toggleAdminPasswordBtn.onclick = () => {
