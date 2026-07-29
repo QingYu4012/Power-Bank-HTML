@@ -1,0 +1,34 @@
+# 编译输出
+**/Objects/
+**/Listings/
+**/Release/
+**/Debug/
+**/build/
+**/out/
+*.o
+*.obj
+*.d
+*.dep
+*.lst
+*.map
+*.axf
+*.elf
+*.hex
+*.bin
+*.srec
+*.dis
+*.htm
+*.log
+
+# IDE和本地缓存
+.cache/
+.gradle/
+.gradle-user/
+.idea/
+.vscode/ipch/
+*.uvguix.*
+*.uvgui.*
+*.bak
+*.tmp
+*.user
+JLinkLog.txt

@@ -262,3 +262,15 @@
     - 发送间隔缩短到 80ms。
     - NAK、超时、EOT 和 Ymodem 结束包流程增加重试恢复。
     - 限制 Ymodem 文件名长度，避免文件信息超过设备 option bytes 页面空间。
+
+## 2026/7/29 V1.4
+1. 重整 IAP 相关资料：
+    - 将 `IAP功能说明.md` 移至 `IAP/` 目录，补充上位机操作、通信帧、XYmodem 下载、Option Bytes 维护和移植说明。
+    - 将原根目录 Xmodem 示例替换为 `IAP/示例代码/` 下的完整下位机参考实现。
+2. 新增 IAP 下位机示例模块：
+    - 新增 `iap.*`、`iap_cmd.*` 和 `xymodem.*`，实现 IAP 状态管理、控制命令解析及 Xmodem/Ymodem 128/1K 接收流程。
+    - 新增 `option_bytes.*`、`flash_port.*` 和 `crc.*`，提供升级信息维护、Flash 擦写适配及 CRC8/CRC16/CRC32 校验。
+3. 完善升级安全与恢复流程：
+    - 升级开始时清除旧 APP 有效标记，完成后校验 APP 向量、大小和 CRC32，再写入有效标记。
+    - 支持 ACK、NAK、CAN、EOT、超时重试和 Ymodem 文件信息包处理。
+4. 未验证：本次仅整理 IAP 文档和下位机示例代码，未执行目标 MCU 工程编译及硬件升级验证。
