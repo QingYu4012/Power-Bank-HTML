@@ -671,6 +671,26 @@
         margin-top: 2px;
         margin-bottom: 4px;
       }
+      .cell-info-admin {
+        border-top: 1px solid rgba(142, 197, 255, 0.2);
+        padding-top: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .cell-info-admin .f {
+        min-height: 42px;
+      }
+      .cmd-response {
+        border-radius: 10px;
+        border: 1px solid rgba(142, 197, 255, 0.22);
+        background: rgba(9, 27, 52, 0.72);
+        color: var(--text);
+        padding: 12px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font: 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
       .iap {
         height: 100%;
         display: flex;
@@ -1292,7 +1312,7 @@
       <section class="conn">
         <div class="meta">
           <div id="portText">端口：未接入</div>
-          <div id="baudText">波特率：921600</div>
+          <div id="baudText">波特率：1500000</div>
         </div>
         <div class="actions">
           <button id="statusConfigBtn" class="state-btn" type="button">
@@ -1450,6 +1470,42 @@
               <div class="kv">
                 <div class="k">批次序列号：</div>
                 <div id="batchSerialNumber" class="v">---</div>
+                <div class="u"></div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="head"><span>🧩</span><span>设备与电芯信息</span></div>
+          <div class="line"></div>
+          <div class="g2 battery-grid" style="margin-top: 6px">
+            <div class="sub">
+              <div class="kv">
+                <div class="k">硬件版本：</div>
+                <div id="projectHardwareVersion" class="v">---</div>
+                <div class="u"></div>
+              </div>
+              <div class="kv">
+                <div class="k">软件版本：</div>
+                <div id="projectSoftwareVersion" class="v">---</div>
+                <div class="u"></div>
+              </div>
+              <div class="kv">
+                <div class="k">产品日期：</div>
+                <div id="projectProductDate" class="v">---</div>
+                <div class="u"></div>
+              </div>
+            </div>
+            <div class="sub">
+              <div class="kv">
+                <div class="k">电芯型号：</div>
+                <div id="cellInfoModel" class="v">---</div>
+                <div class="u"></div>
+              </div>
+              <div class="kv">
+                <div class="k">电芯编码：</div>
+                <div id="cellInfoCode" class="v">---</div>
                 <div class="u"></div>
               </div>
             </div>
@@ -1641,6 +1697,36 @@
                     发送测试数据
                   </button>
                 </div>
+                <div class="cell-info-admin">
+                  <div class="stitle" style="font-size: 13px; color: var(--text)">
+                    Cell_Info 设置与回读
+                  </div>
+                  <div id="cellInfoSetTip" class="note ok">未读取电芯信息</div>
+                  <input
+                    id="cellInfoModelInput"
+                    class="f"
+                    type="text"
+                    maxlength="24"
+                    placeholder="电芯型号（A-Z、0-9、-，1-24字符）"
+                  />
+                  <input
+                    id="cellInfoCodeInput"
+                    class="f"
+                    type="text"
+                    maxlength="24"
+                    placeholder="电芯编码（A-Z、0-9、-，1-24字符）"
+                  />
+                  <div class="cg two admin-test-actions">
+                    <button id="sendGetCellInfoBtn" class="b" type="button">
+                      读取电芯信息</button
+                    ><button id="sendSetCellModelBtn" class="b" type="button">
+                      设置电芯型号
+                    </button>
+                  </div>
+                  <button id="sendSetCellCodeBtn" class="b full" type="button">
+                    设置电芯编码
+                  </button>
+                </div>
                 <button id="openIapBtn" class="b full" type="button">
                   更新程序
                 </button>
@@ -1800,17 +1886,36 @@
       </div>
     </div>
 
+    <div id="commandResponseModal" class="m">
+      <div class="d s">
+        <div class="dh">
+          <div id="commandResponseTitle" class="dtit">命令返回</div>
+        </div>
+        <div class="db">
+          <div id="commandResponseBody" class="cmd-response">暂无返回数据</div>
+        </div>
+        <div class="df">
+          <button id="closeCommandResponseBtn" class="b" type="button">
+            确定
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="toastWrap" class="tw"></div>
 
     <script>
       (() => {
         const CMD_ACK = 0x00,
+          CMD_INFO = 0x01,
           CMD_DATA = 0x02,
           CMD_RTC = 0x03,
           CMD_SET_RTC = 0x04,
           CMD_PORT = 0x05,
           CMD_GET_TEST = 0x06,
-          CMD_SET_TEST = 0x07;
+          CMD_SET_TEST = 0x07,
+          CMD_GET_CELL_INFO = 0x08,
+          CMD_SET_CELL_INFO = 0x09;
         const IAP_CMD_GET_ACK = 0x00,
           IAP_CMD_GET_OPTION_BYTES = 0x01,
           IAP_CMD_SET_BOOT_STATE = 0x02,
@@ -1819,6 +1924,11 @@
           IAP_APP_MAX_SIZE = 0x9e00,
           IAP_APP_READY_KEY = 0xaa55bbdd,
           WEB_SERIAL_BUFFER_SIZE = 64 * 1024,
+          DATA_FRAME_BUFFER_SIZE = 64 * 1024,
+          DATA_POLL_INTERVAL_MS = 1000,
+          PORT_POLL_INTERVAL_MS = 400,
+          POLL_COMMAND_GAP_MS = 8,
+          DATA_REQUEST_MAX_LENGTH = 32,
           XMODEM_CMD_SOH = 0x01,
           XMODEM_CMD_STX = 0x02,
           XMODEM_CMD_EOT = 0x04,
@@ -1983,9 +2093,9 @@
           supported: "serial" in navigator,
           ports: [],
           selPort: null,
-          baud: 921600,
+          baud: 1500000,
           useCustom: false,
-          common: [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600],
+          common: [9600, 115200, 230400, 460800, 921600, 1000000, 1500000],
           activePort: null,
           writer: null,
           reader: null,
@@ -1997,13 +2107,16 @@
           writeQ: Promise.resolve(),
           isConnected: false,
           pendingStatic: new Set(STATIC_TYPES),
+          pendingProjectInfo: true,
+          pendingCellInfo: true,
           bufData: [],
-          bufTest: [],
           bufIap: [],
           soc: 0,
           soh: 0,
           status: 0,
           bat: null,
+          projectInfo: null,
+          cellInfo: null,
           portsInfo: null,
           dev: false,
           iap: false,
@@ -2038,6 +2151,8 @@
           testMap: new Map(),
           lastTestReq: TEST_OPTS[0].id,
           testTip: "未读取测试数据",
+          cellInfoSetTip: "未读取电芯信息",
+          pendingCellWrite: null,
           lastCmdNano: 0,
           phoneMs: Date.now(),
           pbMs: new Date(2026, 2, 31, 0, 0, 0, 0).getTime(),
@@ -2086,6 +2201,8 @@
           iapLogs: [],
         };
         app.bat = defBat();
+        app.projectInfo = defProjectInfo();
+        app.cellInfo = defCellInfo();
         app.portsInfo = defPorts();
 
         const el = {
@@ -2129,6 +2246,11 @@
           batteryVendor: gid("batteryVendor"),
           productionDate: gid("productionDate"),
           batchSerialNumber: gid("batchSerialNumber"),
+          projectHardwareVersion: gid("projectHardwareVersion"),
+          projectSoftwareVersion: gid("projectSoftwareVersion"),
+          projectProductDate: gid("projectProductDate"),
+          cellInfoModel: gid("cellInfoModel"),
+          cellInfoCode: gid("cellInfoCode"),
           portInfoList: gid("portInfoList"),
           passthroughReadyText: gid("passthroughReadyText"),
           exitDevBtn: gid("exitDevBtn"),
@@ -2175,6 +2297,12 @@
           setTestValueInput: gid("setTestValueInput"),
           sendGetTestBtn: gid("sendGetTestBtn"),
           sendSetTestBtn: gid("sendSetTestBtn"),
+          cellInfoSetTip: gid("cellInfoSetTip"),
+          cellInfoModelInput: gid("cellInfoModelInput"),
+          cellInfoCodeInput: gid("cellInfoCodeInput"),
+          sendGetCellInfoBtn: gid("sendGetCellInfoBtn"),
+          sendSetCellModelBtn: gid("sendSetCellModelBtn"),
+          sendSetCellCodeBtn: gid("sendSetCellCodeBtn"),
           openIapBtn: gid("openIapBtn"),
           iapView: gid("iapView"),
           iapStateText: gid("iapStateText"),
@@ -2208,6 +2336,10 @@
           adminLoginError: gid("adminLoginError"),
           cancelAdminBtn: gid("cancelAdminBtn"),
           confirmAdminBtn: gid("confirmAdminBtn"),
+          commandResponseModal: gid("commandResponseModal"),
+          commandResponseTitle: gid("commandResponseTitle"),
+          commandResponseBody: gid("commandResponseBody"),
+          closeCommandResponseBtn: gid("closeCommandResponseBtn"),
           toastWrap: gid("toastWrap"),
         };
 
@@ -2235,6 +2367,16 @@
             batchSerialNumber: "---",
           };
         }
+        function defProjectInfo() {
+          return {
+            hardwareVersion: "---",
+            softwareVersion: "---",
+            productDate: "---",
+          };
+        }
+        function defCellInfo() {
+          return { model: "---", code: "---" };
+        }
         function defPorts() {
           const m = new Map();
           for (let i = 0; i < PORT_COUNT; i++)
@@ -2258,6 +2400,8 @@
               mosVoltageRefreshed: false,
               portCurrentMa: 0,
               portCurrentRefreshed: false,
+              systemPort: false,
+              powerMw: null,
               dpdmProtocolCode: 0,
               protectionFlags: 0,
               portType: 0,
@@ -2445,6 +2589,14 @@
           el.productionDate.textContent = d.productionDate;
           el.batchSerialNumber.textContent = d.batchSerialNumber;
         }
+        function renderDeviceInfo() {
+          el.projectHardwareVersion.textContent = app.projectInfo.hardwareVersion;
+          el.projectSoftwareVersion.textContent = app.projectInfo.softwareVersion;
+          el.projectProductDate.textContent = app.projectInfo.productDate;
+          el.cellInfoModel.textContent = app.cellInfo.model;
+          el.cellInfoCode.textContent = app.cellInfo.code;
+          if (el.cellInfoSetTip) el.cellInfoSetTip.textContent = app.cellInfoSetTip;
+        }
         const protErr = (e) =>
           e == null
             ? "正常"
@@ -2504,14 +2656,19 @@
               ph = !allowData,
               txt = (v) => (ph ? "---" : v),
               num = (v) => (ph ? "---" : String(v)),
-              canPower = !ph && p.mosVoltageRefreshed && p.portCurrentRefreshed,
-              pwr = canPower
-                ? String(
-                    Math.floor(
-                      (Number(p.mosVoltageMv) * Number(p.portCurrentMa)) / 1000,
-                    ),
-                  )
-                : "---",
+              directPower = !ph && p.systemPort && Number.isFinite(p.powerMw),
+              canPower =
+                directPower ||
+                (!ph && p.mosVoltageRefreshed && p.portCurrentRefreshed),
+              pwr = directPower
+                ? String(p.powerMw)
+                : canPower
+                  ? String(
+                      Math.floor(
+                        (Number(p.mosVoltageMv) * Number(p.portCurrentMa)) / 1000,
+                      ),
+                    )
+                  : "---",
               pdRaw = pdProto(p.pdProtocolType),
               dpRaw = dpdm(p.dpdmProtocolCode),
               hRaw = p.pdHandshakeOk ? pdRaw : dpRaw,
@@ -2536,6 +2693,8 @@
                   ? protErr(p.lastErrorCode)
                   : disabled
                     ? "未使能"
+                    : p.systemPort && p.hasData && raw === "NONE"
+                      ? "空闲"
                     : allowData
                       ? "已更新"
                       : "未刷新";
@@ -2585,6 +2744,7 @@
           renderTime();
           renderRings();
           renderBat();
+          renderDeviceInfo();
           renderPorts();
           renderCounter();
           renderLogs();
@@ -4403,7 +4563,10 @@
           return crc & 255;
         }
         function pkt(cmd, data) {
-          const d = data.length > 1024 ? data.slice(0, 1024) : data,
+          const d =
+              data.length > DATA_REQUEST_MAX_LENGTH
+                ? data.slice(0, DATA_REQUEST_MAX_LENGTH)
+                : data,
             len = d.length,
             ll = len & 255,
             lh = (len >> 8) & 255,
@@ -4425,8 +4588,8 @@
         }
         function bufAdd(buf, bytes) {
           for (let i = 0; i < bytes.length; i++) buf.push(bytes[i] & 255);
-          if (buf.length > 4096) {
-            const keep = buf.slice(Math.max(0, buf.length - 256));
+          if (buf.length > DATA_FRAME_BUFFER_SIZE) {
+            const keep = buf.slice(Math.max(0, buf.length - 4096));
             buf.length = 0;
             buf.push(...keep);
           }
@@ -4441,6 +4604,10 @@
             }
             const cmd = buf[idx + 2] & 255,
               len = (buf[idx + 3] & 255) | ((buf[idx + 4] & 255) << 8);
+            if ((cmd & 0x7f) > CMD_SET_CELL_INFO) {
+              idx++;
+              continue;
+            }
             if (len < 0 || len > 1024) {
               idx++;
               continue;
@@ -4463,8 +4630,8 @@
             idx += size;
           }
           if (idx > 0) buf.splice(0, idx);
-          if (buf.length > 4096) {
-            const keep = buf.slice(Math.max(0, buf.length - 256));
+          if (buf.length > DATA_FRAME_BUFFER_SIZE) {
+            const keep = buf.slice(Math.max(0, buf.length - 4096));
             buf.length = 0;
             buf.push(...keep);
           }
@@ -4488,6 +4655,102 @@
             .replace(/\u0000/g, " ")
             .trim();
           return t || null;
+        }
+        function parseProjectInfo(raw) {
+          if (!raw || raw.length < 7) return null;
+          const firstEnd = raw.indexOf(0),
+            secondEnd = firstEnd >= 0 ? raw.indexOf(0, firstEnd + 1) : -1;
+          if (firstEnd <= 0 || secondEnd <= firstEnd + 1 || secondEnd + 5 >= raw.length)
+            return null;
+          const hardwareVersion = ascii(raw.slice(0, firstEnd)),
+            softwareVersion = ascii(raw.slice(firstEnd + 1, secondEnd)),
+            year = (raw[secondEnd + 1] & 255) | ((raw[secondEnd + 2] & 255) << 8),
+            month = raw[secondEnd + 3] & 255,
+            day = raw[secondEnd + 4] & 255;
+          if (!hardwareVersion || !softwareVersion || year < 1970 || month < 1 || month > 12 || day < 1 || day > 31)
+            return null;
+          return {
+            hardwareVersion,
+            softwareVersion,
+            productDate: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+          };
+        }
+        function parseCellInfo(raw) {
+          if (!raw || raw.length < 4) return null;
+          const modelLen = raw[0] & 255,
+            codeLenPos = 1 + modelLen;
+          if (modelLen < 1 || modelLen > 24 || codeLenPos >= raw.length)
+            return null;
+          const codeLen = raw[codeLenPos] & 255;
+          if (codeLen < 1 || codeLen > 24 || codeLenPos + 1 + codeLen !== raw.length)
+            return null;
+          const model = ascii(raw.slice(1, codeLenPos)),
+            code = ascii(raw.slice(codeLenPos + 1));
+          if (!model || !code) return null;
+          return { model, code };
+        }
+        function commandName(cmd) {
+          const names = {
+            [CMD_ACK]: "USB_CMD_GET_ACK",
+            [CMD_INFO]: "USB_CMD_GET_INFO",
+            [CMD_DATA]: "USB_CMD_GET_DATA",
+            [CMD_RTC]: "USB_CMD_GET_RTC",
+            [CMD_SET_RTC]: "USB_CMD_SET_RTC",
+            [CMD_PORT]: "USB_CMD_GET_PROT_DATA",
+            [CMD_GET_TEST]: "USB_CMD_GET_TEST",
+            [CMD_SET_TEST]: "USB_CMD_SET_TEST",
+            [CMD_GET_CELL_INFO]: "USB_CMD_GET_CELL_INFO",
+            [CMD_SET_CELL_INFO]: "USB_CMD_SET_CELL_INFO",
+          };
+          return names[cmd & 0x7f] || `CMD 0x${(cmd & 255).toString(16).toUpperCase().padStart(2, "0")}`;
+        }
+        function commandMeaning(rawCmd, payload) {
+          const cmd = rawCmd & 0x7f,
+            rawText = payload && payload.length ? hex(payload) : "无";
+          let meaning = "已收到合法CRC8响应帧";
+          if (cmd === CMD_ACK)
+            meaning = payload.length === 1 && payload[0] === 1 ? "设备数据协议连接正常" : "设备返回了连接状态";
+          else if (cmd === CMD_INFO) {
+            const info = parseProjectInfo(payload);
+            meaning = info
+              ? `硬件版本：${info.hardwareVersion}\n软件版本：${info.softwareVersion}\n产品日期：${info.productDate}`
+              : "工程信息格式无效";
+          } else if (cmd === CMD_DATA && payload.length >= 2) {
+            const type = payload[0] & 255,
+              option = GET_DATA_OPTS.find((item) => item[0] === type),
+              value = payload.slice(1),
+              textValue = type >= DT_TYPE && type <= DT_DATE ? ascii(value) : leInt(value, type === DT_TEMP || type === DT_CUR);
+            meaning = `数据类型：${option ? option[1] : `0x${type.toString(16).toUpperCase().padStart(2, "0")}`}\n解析值：${textValue == null ? "无效" : textValue}`;
+          } else if (cmd === CMD_RTC) {
+            const ms = rtc(payload);
+            meaning = ms == null ? "RTC数据格式无效" : `充电宝时间：${fDate(ms)} ${fTime(ms)}`;
+          } else if (cmd === CMD_SET_RTC)
+            meaning = payload[0] === 1 ? "RTC设置成功" : "RTC设置失败：参数错误";
+          else if (cmd === CMD_PORT) {
+            const port = decodePort(payload, null);
+            meaning = port
+              ? `端口：${port.portId}\n状态：${outState(port.stableOutputState)}\n功率：${port.systemPort ? `${port.powerMw} mW` : "详见数据界面"}`
+              : "端口数据格式无效或端口不存在";
+          } else if (cmd === CMD_GET_TEST && payload.length >= 2)
+            meaning = `测试参数ID：0x${(payload[0] & 255).toString(16).toUpperCase().padStart(2, "0")}\n设备值：${leInt(payload.slice(1), false)}`;
+          else if (cmd === CMD_SET_TEST)
+            meaning = payload[0] === 1 ? "测试参数设置成功，已触发回读" : "测试参数设置失败";
+          else if (cmd === CMD_GET_CELL_INFO) {
+            const info = parseCellInfo(payload);
+            meaning = info ? `电芯型号：${info.model}\n电芯编码：${info.code}` : "电芯信息格式无效";
+          } else if (cmd === CMD_SET_CELL_INFO) {
+            const field = payload[0] === 0 ? "电芯型号" : payload[0] === 1 ? "电芯编码" : "未知字段";
+            meaning = payload.length >= 2 && payload[1] === 0
+              ? `${field}设置成功，已触发回读校验`
+              : `${field}设置失败，结果码：${payload.length >= 2 ? payload[1] : "无"}`;
+          }
+          return `命令：${commandName(cmd)}\n数据长度：${payload.length} 字节\n原始数据：${rawText}\n\n具体含义：\n${meaning}`;
+        }
+        function showCommandResponse(rawCmd, payload) {
+          if (!app.dev || !el.commandResponseModal) return;
+          el.commandResponseTitle.textContent = `${commandName(rawCmd)} 返回`;
+          el.commandResponseBody.textContent = commandMeaning(rawCmd, payload);
+          el.commandResponseModal.classList.add("show");
         }
         function normDate(s) {
           const d = String(s || "").replace(/\D+/g, "");
@@ -4626,6 +4889,33 @@
           return best;
         }
         function decodePort(raw, fallbackPortId = null) {
+          if (raw && raw.length === 6) {
+            const portId = raw[0] & 255,
+              systemState = raw[1] & 255;
+            if (portId >= 3 || systemState > 2) return null;
+            const protocolState =
+                systemState === 1 ? 2 : systemState === 2 ? 1 : 0,
+              powerMw =
+                (raw[2] & 255) |
+                ((raw[3] & 255) << 8) |
+                ((raw[4] & 255) << 16) |
+                ((raw[5] & 255) * 2 ** 24);
+            return {
+              portId,
+              enableKnown: true,
+              portEnabled: true,
+              hasData: true,
+              lastErrorCode: null,
+              realtimeOutputState: protocolState,
+              stableOutputState: protocolState,
+              feedbackPortId: portId,
+              portType: portId === 2 ? 2 : 1,
+              systemPort: true,
+              powerMw: powerMw >>> 0,
+              mosVoltageRefreshed: false,
+              portCurrentRefreshed: false,
+            };
+          }
           if (!raw || raw.length < 15) return null;
           const b0 = raw[0] & 255,
             b1 = raw[1] & 255,
@@ -4690,6 +4980,54 @@
         }
         function onDataFrame(rawCmd, p) {
           const cmd = rawCmd & 0x7f;
+          if (cmd === CMD_INFO) {
+            const info = parseProjectInfo(p);
+            if (!info) return;
+            app.projectInfo = info;
+            app.pendingProjectInfo = false;
+            renderDeviceInfo();
+            return;
+          }
+          if (cmd === CMD_GET_CELL_INFO) {
+            const info = parseCellInfo(p);
+            if (!info) return;
+            app.cellInfo = info;
+            app.pendingCellInfo = false;
+            el.cellInfoModelInput.value = info.model;
+            el.cellInfoCodeInput.value = info.code;
+            if (app.pendingCellWrite) {
+              const actual = app.pendingCellWrite.field === 0 ? info.model : info.code,
+                ok = actual === app.pendingCellWrite.expected;
+              app.cellInfoSetTip = ok
+                ? `${app.pendingCellWrite.label}设置并回读一致：${actual}`
+                : `${app.pendingCellWrite.label}回读不一致：期望${app.pendingCellWrite.expected}，实际${actual}`;
+              toast(app.cellInfoSetTip);
+              app.pendingCellWrite = null;
+            } else {
+              app.cellInfoSetTip = `已读取：型号 ${info.model}，编码 ${info.code}`;
+            }
+            renderDeviceInfo();
+            return;
+          }
+          if (cmd === CMD_SET_CELL_INFO) {
+            if (!p || p.length < 2) return;
+            if ((p[1] & 255) === 0) {
+              app.cellInfoSetTip = "设置完成，正在回读校验...";
+              renderDeviceInfo();
+              void sendData(CMD_GET_CELL_INFO);
+            } else {
+              app.cellInfoSetTip = `电芯信息设置失败，结果码：${p[1] & 255}`;
+              app.pendingCellWrite = null;
+              renderDeviceInfo();
+              toast(app.cellInfoSetTip);
+            }
+            return;
+          }
+          if (cmd === CMD_SET_RTC) {
+            if (p && p.length === 1 && (p[0] & 255) === 1)
+              toast("RTC同步成功");
+            return;
+          }
           if (cmd === CMD_RTC) {
             const d = rtc(p);
             if (d != null) {
@@ -4707,8 +5045,11 @@
               d = app.bat;
             switch (t) {
               case DT_TEMP:
-                if (vu == null) return;
-                app.bat = { ...d, batteryTemperature: d2u(vu) };
+                {
+                  const vs = leInt(vr, true);
+                  if (vs == null) return;
+                  app.bat = { ...d, batteryTemperature: d2u(vs) };
+                }
                 break;
               case DT_VOLT:
                 if (vu == null) return;
@@ -4904,6 +5245,8 @@
           bufAdd(app.bufData, bytes);
           extract(app.bufData).forEach(([c, p]) => {
             onDataFrame(c, p);
+            onTestFrame(c, p);
+            showCommandResponse(c, p);
           });
         }
         function feedIap(bytes) {
@@ -4914,11 +5257,6 @@
           }
           bufAdd(app.bufIap, bytes);
           extractIap(app.bufIap).forEach(([c, p]) => dispatchIapFrame(c, p));
-        }
-        function feedTest(bytes) {
-          if (!bytes || !bytes.length) return;
-          bufAdd(app.bufTest, bytes);
-          extract(app.bufTest).forEach(([c, p]) => onTestFrame(c, p));
         }
         const bjSec = () =>
           Math.max(
@@ -5075,10 +5413,15 @@
           app.status = 0;
           app.pbMs = app.pbDefault;
           app.bat = defBat();
+          app.projectInfo = defProjectInfo();
+          app.cellInfo = defCellInfo();
           app.pendingStatic = new Set(STATIC_TYPES);
+          app.pendingProjectInfo = true;
+          app.pendingCellInfo = true;
+          app.pendingCellWrite = null;
+          app.cellInfoSetTip = "未读取电芯信息";
           app.portsInfo = defPorts();
           app.bufData = [];
-          app.bufTest = [];
           app.bufIap = [];
           app.portFrameExpect = 0;
           app.portFrameLastTs = 0;
@@ -5104,9 +5447,8 @@
                   value instanceof Uint8Array ? value : new Uint8Array(value);
                 pushRxFrameChunk(c);
                 feedXmodemControl(c);
-                feedIap(c);
-                feedTest(c);
-                feedData(c);
+                if (app.iap) feedIap(c);
+                else feedData(c);
               }
             }
           } catch (_) {
@@ -5297,34 +5639,51 @@
           if (!app.isConnected || app.dev || app.iap) return;
           app.portFrameExpect = 0;
           app.portFrameLastTs = 0;
-          const dt = ++app.dataToken,
-            pt = ++app.portToken;
+          const token = ++app.dataToken;
           (async () => {
-            while (dt === app.dataToken && app.isConnected && !app.dev && !app.iap) {
-              const st = Date.now();
-              await sendData(CMD_ACK);
-              await sleep(5);
-              await sendData(CMD_RTC, new Uint8Array([0x01]));
-              const types = [...DYNAMIC_TYPES];
-              STATIC_TYPES.forEach((t) => {
-                if (app.pendingStatic.has(t)) types.push(t);
-              });
-              for (let i = 0; i < types.length; i++) {
-                await sleep(i === 0 ? 5 : 3);
-                const t = types[i];
-                await sendData(CMD_DATA, new Uint8Array([t & 255]));
+            let nextDataAt = 0,
+              nextPortAt = 0;
+            const sendPollFrame = async (cmd, data = new Uint8Array()) => {
+              if (token !== app.dataToken || !app.isConnected || app.dev || app.iap)
+                return false;
+              const sent = await sendData(cmd, data);
+              if (sent) await sleep(POLL_COMMAND_GAP_MS);
+              return sent;
+            };
+            while (
+              token === app.dataToken &&
+              app.isConnected &&
+              !app.dev &&
+              !app.iap
+            ) {
+              const now = Date.now();
+              if (now >= nextDataAt) {
+                const cycleStart = now,
+                  types = [...DYNAMIC_TYPES];
+                STATIC_TYPES.forEach((type) => {
+                  if (app.pendingStatic.has(type)) types.push(type);
+                });
+                await sendPollFrame(CMD_ACK);
+                if (app.pendingProjectInfo) await sendPollFrame(CMD_INFO);
+                if (app.pendingCellInfo) await sendPollFrame(CMD_GET_CELL_INFO);
+                await sendPollFrame(CMD_RTC, new Uint8Array([0x01]));
+                for (let i = 0; i < types.length; i++) {
+                  if (!(await sendPollFrame(CMD_DATA, new Uint8Array([types[i] & 255]))))
+                    break;
+                }
+                nextDataAt = cycleStart + DATA_POLL_INTERVAL_MS;
+                continue;
               }
-              await sleep(Math.max(0, 1000 - (Date.now() - st)));
-            }
-          })();
-          (async () => {
-            while (pt === app.portToken && app.isConnected && !app.dev && !app.iap) {
-              const st = Date.now();
-              for (let p = 0; p < PORT_COUNT; p++) {
-                if (p > 0) await sleep(5);
-                await sendData(CMD_PORT, new Uint8Array([p & 255]));
+              if (now >= nextPortAt) {
+                const cycleStart = now;
+                for (let port = 0; port < PORT_COUNT; port++) {
+                  if (!(await sendPollFrame(CMD_PORT, new Uint8Array([port & 255]))))
+                    break;
+                }
+                nextPortAt = cycleStart + PORT_POLL_INTERVAL_MS;
+                continue;
               }
-              await sleep(Math.max(0, 400 - (Date.now() - st)));
+              await sleep(Math.max(1, Math.min(nextDataAt, nextPortAt) - now));
             }
           })();
         }
@@ -5628,6 +5987,32 @@
           const p = pkt(CMD_SET_TEST, pl);
           await sendTestPkt(p, tip, `发送测试数据 已发送(${p.length}字节)`);
         }
+        function normalizeCellInfoText(value) {
+          return String(value || "").trim().toUpperCase();
+        }
+        async function sendSetCellInfo(field) {
+          const input = field === 0 ? el.cellInfoModelInput : el.cellInfoCodeInput,
+            label = field === 0 ? "电芯型号" : "电芯编码",
+            value = normalizeCellInfoText(input.value);
+          input.value = value;
+          if (!/^[A-Z0-9-]{1,24}$/.test(value)) {
+            toast(`${label}格式错误：仅允许A-Z、0-9、-，长度1-24字符`);
+            return;
+          }
+          const text = new TextEncoder().encode(value),
+            payload = new Uint8Array(1 + text.length);
+          payload[0] = field & 255;
+          payload.set(text, 1);
+          app.pendingCellWrite = { field, label, expected: value };
+          app.cellInfoSetTip = `${label}设置请求已发送，等待设备确认...`;
+          renderDeviceInfo();
+          const sent = await sendCmd("USB_CMD_SET_CELL_INFO", CMD_SET_CELL_INFO, payload);
+          if (!sent) {
+            app.pendingCellWrite = null;
+            app.cellInfoSetTip = `${label}设置请求发送失败`;
+            renderDeviceInfo();
+          }
+        }
         async function syncRtc() {
           if (!app.isConnected) {
             toast("未连接设备，无法同步RTC");
@@ -5750,8 +6135,8 @@
             if (e.target === el.serialConfigModal) closeCfg();
           };
           el.adminLoginBtn.onclick = openAdmin;
-          el.cmdGetAckBtn.onclick = () => sendCmd("USB_CMD_GET_ACK", 0x00);
-          el.cmdGetInfoBtn.onclick = () => sendCmd("USB_CMD_GET_INFO", 0x01);
+          el.cmdGetAckBtn.onclick = () => sendCmd("USB_CMD_GET_ACK", CMD_ACK);
+          el.cmdGetInfoBtn.onclick = () => sendCmd("USB_CMD_GET_INFO", CMD_INFO);
           el.sendGetDataBtn.onclick = () =>
             sendCmd(
               "USB_CMD_GET_DATA",
@@ -5787,6 +6172,18 @@
             app.testVal = String(v);
             sendSetTest(s.id, v, true);
           };
+          el.sendGetCellInfoBtn.onclick = () =>
+            sendCmd("USB_CMD_GET_CELL_INFO", CMD_GET_CELL_INFO);
+          el.sendSetCellModelBtn.onclick = () => sendSetCellInfo(0);
+          el.sendSetCellCodeBtn.onclick = () => sendSetCellInfo(1);
+          [el.cellInfoModelInput, el.cellInfoCodeInput].forEach((input) => {
+            input.oninput = () => {
+              input.value = input.value
+                .toUpperCase()
+                .replace(/[^A-Z0-9-]+/g, "")
+                .slice(0, 24);
+            };
+          });
           el.setTestValueInput.oninput = () => {
             el.setTestValueInput.value = el.setTestValueInput.value
               .replace(/\D+/g, "")
@@ -5833,6 +6230,12 @@
           };
           el.adminModal.onclick = (e) => {
             if (e.target === el.adminModal) closeAdmin();
+          };
+          el.closeCommandResponseBtn.onclick = () =>
+            el.commandResponseModal.classList.remove("show");
+          el.commandResponseModal.onclick = (e) => {
+            if (e.target === el.commandResponseModal)
+              el.commandResponseModal.classList.remove("show");
           };
           if (app.supported) {
             navigator.serial.addEventListener("connect", async () => {
