@@ -2065,7 +2065,7 @@
             id: 2,
             label: "UsedMonths已使用月份",
             min: 0,
-            max: 65535,
+            max: 954,
             def: 0,
             unit: "",
             quick: [
@@ -2151,6 +2151,10 @@
           testMap: new Map(),
           lastTestReq: TEST_OPTS[0].id,
           testTip: "未读取测试数据",
+          /*
+           * 区分设备确认值和用户待发送值，避免界面刷新覆盖快捷按钮或手动输入。
+           */
+          testEdited: false,
           cellInfoSetTip: "未读取电芯信息",
           pendingCellWrite: null,
           lastCmdNano: 0,
@@ -5195,7 +5199,14 @@
           const n = pid === 0x00 ? (v === 0 ? 0 : 1) : v;
           app.testMap.set(pid, n);
           if (pid === 0x00) app.ltVal = n === 0 ? 1 : 0;
-          else if (app.testSel === pid && app.testVal !== String(n))
+          /*
+           * 用户等待设备回复期间已经选择快捷值或手动输入时，迟到的旧回复不能覆盖待发送值。
+           */
+          else if (
+            app.testSel === pid &&
+            !app.testEdited &&
+            app.testVal !== String(n)
+          )
             app.testVal = String(n);
           const op = TEST_OPTS.find((x) => x.id === pid);
           const lb = op
@@ -5910,8 +5921,6 @@
           if (!show) return;
           const sel = getSelTest(),
             dv = app.testMap.has(sel.id) ? app.testMap.get(sel.id) : null;
-          if (sel.id === 0x00) app.testVal = String(app.ltVal);
-          else if (dv != null) app.testVal = String(dv);
           el.testParamGrid.innerHTML = "";
           TEST_OPTS.forEach((o) => {
             const b = document.createElement("button");
@@ -5920,6 +5929,7 @@
             b.textContent = o.label;
             b.onclick = () => {
               app.testSel = o.id;
+              app.testEdited = false;
               const val = app.testMap.has(o.id) ? app.testMap.get(o.id) : o.def;
               app.testVal = String(val);
               renderTestUi();
@@ -5945,7 +5955,13 @@
             b.textContent = `${it.l}${sel.unit}`;
             b.onclick = () => {
               if (sel.id === 0x00) app.ltVal = it.v;
-              else app.testVal = String(it.v);
+              else {
+                /*
+                 * 快捷值属于用户待发送值，界面刷新时必须优先保留。
+                 */
+                app.testEdited = true;
+                app.testVal = String(it.v);
+              }
               renderTestUi();
             };
             el.testQuickGrid.appendChild(b);
@@ -5971,6 +5987,10 @@
         }
         async function sendGetTest(pid, tip = true) {
           app.lastTestReq = pid;
+          /*
+           * 主动读取时允许本次设备回复同步输入框；等待期间再次编辑会重新置位。
+           */
+          if (app.testSel === pid) app.testEdited = false;
           app.testTip = "已发送获取请求，等待设备回复...";
           renderTestUi();
           const p = pkt(CMD_GET_TEST, new Uint8Array([pid & 255]));
@@ -6169,6 +6189,7 @@
               toast(`参数超出范围：${s.min}-${s.max}${s.unit}`);
               return;
             }
+            app.testEdited = true;
             app.testVal = String(v);
             sendSetTest(s.id, v, true);
           };
@@ -6188,6 +6209,10 @@
             el.setTestValueInput.value = el.setTestValueInput.value
               .replace(/\D+/g, "")
               .slice(0, 5);
+            /*
+             * 手动输入与快捷按钮共用用户待发送状态。
+             */
+            app.testEdited = true;
             app.testVal = el.setTestValueInput.value;
           };
           el.openIapBtn.onclick = () => iapMode(true);
@@ -6280,6 +6305,7 @@
           el.sendInput.placeholder = "发送区（文本）";
           resetRxFrame(true);
           app.testVal = String(TEST_OPTS[0].def);
+          app.testEdited = false;
           renderTestUi();
         }
         function renderBanner() {

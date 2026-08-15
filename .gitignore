@@ -8,6 +8,10 @@
 **/dist/
 **/coverage/
 **/node_modules/
+**/test-results/
+**/playwright-report/
+**/blob-report/
+**/.nyc_output/
 *.o
 *.obj
 *.d
@@ -25,6 +29,8 @@
 *.exe
 *.dll
 *.pdb
+*.lcov
+*.tsbuildinfo
 
 # IDE和本地缓存
 .cache/
@@ -50,3 +56,8 @@ Desktop.ini
 *.swp
 *.swo
 *~
+
+# 本地环境变量
+.env
+.env.local
+.env.*.local
