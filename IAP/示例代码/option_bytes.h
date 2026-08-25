@@ -70,6 +70,9 @@ uint32_t *Option_Bytes_Get_Data_Point(void);
 /* 获取选项字节长度 */
 uint8_t Option_Bytes_Get_Size(void);
 
+/* 获取当前固件APP可用存放空间 */
+uint32_t Option_Bytes_Get_APP_Capacity(void);
+
 /* 获取选项字节 应用层密钥 */
 uint32_t Option_Bytes_Get_APP_KEY(void);
 

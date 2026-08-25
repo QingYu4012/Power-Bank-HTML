@@ -14,6 +14,8 @@ const uint32_t __FILE_PROTOCOL__    __attribute__((at(APP_OPTION_BYTES_ADDR + 20
 const uint32_t __FILE_SIZE__        __attribute__((at(APP_OPTION_BYTES_ADDR + 24))) = 0x00000000;
 const uint32_t __FILE_NAME_LEN__    __attribute__((at(APP_OPTION_BYTES_ADDR + 28))) = 0x00000000;
 const uint32_t __FILE_NAME__[OPTION_BYTES_FILE_NAME_MAX_LEN / 4] __attribute__((at(APP_OPTION_BYTES_ADDR + 32))) = {0};
+/* APP可用空间由当前固件分区配置生成 */
+const uint32_t __APP_CAPACITY__     __attribute__((at(APP_OPTION_BYTES_ADDR + 96))) = IAP_APP_MAX_SIZE;
 #endif
 
 typedef struct {
@@ -29,9 +31,11 @@ typedef struct {
 			uint32_t File_Size;         /* Ymodem原始文件大小 */
 			uint32_t File_Name_Len;     /* 文件名长度 */
 			uint8_t File_Name[OPTION_BYTES_FILE_NAME_MAX_LEN]; /* 文件名 */
+			/* 当前固件APP可用存放空间 */
+			uint32_t APP_Capacity;
 		};
-		uint8_t Byte[32 + OPTION_BYTES_FILE_NAME_MAX_LEN];
-		uint32_t Data[8 + (OPTION_BYTES_FILE_NAME_MAX_LEN / 4)];
+		uint8_t Byte[36 + OPTION_BYTES_FILE_NAME_MAX_LEN];
+		uint32_t Data[9 + (OPTION_BYTES_FILE_NAME_MAX_LEN / 4)];
 	};
 }Option_Bytes_TypeDef;
 
@@ -41,6 +45,8 @@ volatile Option_Bytes_TypeDef Option_Bytes = {0};
 void Option_Bytes_Read_Data(void)
 {
 	memcpy((uint8_t *)Option_Bytes.Data, (uint8_t *)APP_OPTION_BYTES_ADDR, sizeof(Option_Bytes_TypeDef));
+	/* APP容量始终使用当前固件分区配置，兼容旧版Flash中没有该字段的选项字节 */
+	Option_Bytes.APP_Capacity = IAP_APP_MAX_SIZE;
 }
 
 /* 写入选项字节数据 */
@@ -57,8 +63,8 @@ uint32_t Option_Bytes_Data_CRC32_Calculate(void)
 {
 	uint8_t *Data = (uint8_t *)Option_Bytes.Byte;
 	uint32_t CRC_Result = Data_CRC32_Calculate(0, Data, 16);
-	/* OB_CRC32自身不参与校验，后续新增文件信息也纳入选项字节CRC */
-	CRC_Result = Data_CRC32_Calculate(CRC_Result, &Data[20], sizeof(Option_Bytes_TypeDef) - 20);
+	/* OB_CRC32自身不参与校验，APP容量为编译期只读配置，保持旧96字节结构的CRC兼容 */
+	CRC_Result = Data_CRC32_Calculate(CRC_Result, &Data[20], 12 + OPTION_BYTES_FILE_NAME_MAX_LEN);
 	return CRC_Result;
 }
 
@@ -72,6 +78,12 @@ uint32_t *Option_Bytes_Get_Data_Point(void)
 uint8_t Option_Bytes_Get_Size(void)
 {
 	return sizeof(Option_Bytes_TypeDef);
+}
+
+/* 获取当前固件APP可用存放空间 */
+uint32_t Option_Bytes_Get_APP_Capacity(void)
+{
+	return Option_Bytes.APP_Capacity;
 }
 
 /* 获取选项字节 应用层密钥 */

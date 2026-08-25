@@ -1790,6 +1790,7 @@
                 <div class="stitle">Option Bytes</div>
                 <div class="iap-kv"><span>BOOT_State</span><span id="iapBootState">---</span></div>
                 <div class="iap-kv"><span>APP_SIZE</span><span id="iapAppSize">---</span></div>
+                <div class="iap-kv"><span>APP容量</span><span id="iapAppCapacity">---</span></div>
                 <div class="iap-kv"><span>APP_CRC32</span><span id="iapAppCrc32">---</span></div>
                 <div class="iap-kv"><span>协议</span><span id="iapFileProtocol">---</span></div>
                 <div class="iap-kv"><span>文件信息</span><span id="iapDeviceFileName">---</span></div>
@@ -1921,7 +1922,7 @@
           IAP_CMD_SET_BOOT_STATE = 0x02,
           IAP_CMD_SET_TRANSFER_INFO = 0x03,
           IAP_MAX_DATA_LEN = 128,
-          IAP_APP_MAX_SIZE = 0x9e00,
+          IAP_OPTION_APP_CAPACITY_OFFSET = 96,
           IAP_APP_READY_KEY = 0xaa55bbdd,
           WEB_SERIAL_BUFFER_SIZE = 64 * 1024,
           DATA_FRAME_BUFFER_SIZE = 64 * 1024,
@@ -2192,6 +2193,7 @@
           iapBootState: null,
           iapAppKey: null,
           iapAppSize: null,
+          iapAppCapacity: null,
           iapAppCrc32: null,
           iapObCrc32: null,
           iapFileProtocol: null,
@@ -2325,6 +2327,7 @@
           iapFileCrc32: gid("iapFileCrc32"),
           iapBootState: gid("iapBootState"),
           iapAppSize: gid("iapAppSize"),
+          iapAppCapacity: gid("iapAppCapacity"),
           iapAppCrc32: gid("iapAppCrc32"),
           iapFileProtocol: gid("iapFileProtocol"),
           iapDeviceFileName: gid("iapDeviceFileName"),
@@ -2908,6 +2911,8 @@
               : `${bootStateName(app.iapBootState)} (${app.iapBootState})`;
           el.iapAppSize.textContent =
             app.iapAppSize == null ? "---" : fmtBytes(app.iapAppSize);
+          el.iapAppCapacity.textContent =
+            app.iapAppCapacity == null ? "设备未提供" : fmtBytes(app.iapAppCapacity);
           el.iapAppCrc32.textContent =
             app.iapAppCrc32 == null ? "---" : hex32(app.iapAppCrc32);
           el.iapFileProtocol.textContent =
@@ -3184,6 +3189,7 @@
           app.iapBootState = null;
           app.iapAppKey = null;
           app.iapAppSize = null;
+          app.iapAppCapacity = null;
           app.iapAppCrc32 = null;
           app.iapObCrc32 = null;
           app.iapFileProtocol = null;
@@ -3229,6 +3235,7 @@
           });
           app.iapOptionAttempts = 0;
           app.iapAppSize = null;
+          app.iapAppCapacity = null;
           app.iapAppCrc32 = null;
           app.iapBootState = null;
           app.iapObCrc32 = null;
@@ -3273,7 +3280,11 @@
             obCrc32 = p.length >= 20 ? u32leAt(p, 16) : null,
             fileProtocol = p.length >= 24 ? u32leAt(p, 20) : null,
             fileSize = p.length >= 28 ? u32leAt(p, 24) : null,
-            fileNameLen = p.length >= 32 ? u32leAt(p, 28) : 0;
+            fileNameLen = p.length >= 32 ? u32leAt(p, 28) : 0,
+            appCapacity =
+              p.length >= IAP_OPTION_APP_CAPACITY_OFFSET + 4
+                ? u32leAt(p, IAP_OPTION_APP_CAPACITY_OFFSET)
+                : null;
           if (appSize == null || appCrc32 == null) return false;
           let fileName = "";
           if (p.length >= 32 && fileNameLen) {
@@ -3287,6 +3298,8 @@
           app.iapAppKey = appKey;
           app.iapBootState = bootState;
           app.iapAppSize = appSize >>> 0;
+          app.iapAppCapacity =
+            appCapacity != null && appCapacity >= 8 ? appCapacity >>> 0 : null;
           app.iapAppCrc32 = appCrc32 >>> 0;
           app.iapObCrc32 = obCrc32;
           app.iapFileProtocol = fileProtocol;
@@ -3298,6 +3311,7 @@
             appKey: appKey >>> 0,
             bootState: bootState >>> 0,
             appSize: appSize >>> 0,
+            appCapacity: app.iapAppCapacity,
             appCrc32: appCrc32 >>> 0,
             obCrc32: obCrc32 == null ? null : obCrc32 >>> 0,
             fileProtocol: fileProtocol == null ? null : fileProtocol >>> 0,
@@ -3310,7 +3324,7 @@
             ? ` FILE=${optionProtocolName(fileProtocol)} ${fileName || "---"} ${fmtBytes(fileSize || 0)}`
             : "";
           addIapLog(
-            `设备返回 option bytes：BOOT_State=${bootState == null ? "---" : bootStateName(bootState)} APP_SIZE=${fmtBytes(app.iapAppSize)} APP_CRC32=${hex32(app.iapAppCrc32)}${fileInfo}`,
+            `设备返回 option bytes：BOOT_State=${bootState == null ? "---" : bootStateName(bootState)} APP_SIZE=${fmtBytes(app.iapAppSize)} APP_CAPACITY=${app.iapAppCapacity == null ? "未提供" : fmtBytes(app.iapAppCapacity)} APP_CRC32=${hex32(app.iapAppCrc32)}${fileInfo}`,
           );
           renderIap();
           return option;
@@ -3786,6 +3800,7 @@
           app.iapConnected = false;
           app.iapBootState = null;
           app.iapAppSize = null;
+          app.iapAppCapacity = null;
           app.iapAppCrc32 = null;
           app.iapObCrc32 = null;
           app.iapFileProtocol = null;
@@ -3811,18 +3826,34 @@
           if (!(await ensureIapAck(true, true, transferInput))) return false;
           if (!isIapOperationActive(transferInput)) return false;
           addIapLog("下载前重新读取 option bytes，避免复用上一轮升级状态");
-          if (
-            !(await requestIapOptionOnce(
+          const downloadOption = await requestIapOptionOnce(
               "IAP_CMD_GET_OPTION_BYTES(下载前确认)",
               1,
               transferInput,
-            ))
-          ) {
+            );
+          if (!downloadOption) {
             if (!isIapOperationActive(transferInput)) return false;
             failIapDownload("下载前未能读取 option bytes", transferInput);
             return false;
           }
           if (!isIapOperationActive(transferInput)) return false;
+          if (downloadOption.appCapacity == null) {
+            failIapDownload(
+              "设备 Option Bytes 未提供 APP 容量，请先使用 J-Link 更新 BootLoader",
+              transferInput,
+            );
+            return false;
+          }
+          if (transferInput.total > downloadOption.appCapacity) {
+            failIapDownload(
+              `APP镜像超过设备IAP区域：${fmtBytes(transferInput.total)} > ${fmtBytes(downloadOption.appCapacity)}`,
+              transferInput,
+            );
+            return false;
+          }
+          addIapLog(
+            `设备APP容量确认：${fmtBytes(downloadOption.appCapacity)}，本次传输 ${fmtBytes(transferInput.total)}`,
+          );
           if (app.iapBootState === BOOT_STATE.APP) {
             addIapLog("当前处于 APP，切换到 BOOT_STATE_APP_REQUEST_UPGRAD");
             if (
@@ -4327,13 +4358,6 @@
               total,
               packetCount: Math.ceil(total / proto.block),
             });
-          if (transferInput.total > IAP_APP_MAX_SIZE) {
-            failIapDownload(
-              `APP镜像超过H20 IAP区域：${fmtBytes(transferInput.total)} > ${fmtBytes(IAP_APP_MAX_SIZE)}`,
-              transferInput,
-            );
-            return;
-          }
           app.iapProgress = 0;
           app.iapRemainBytes = transferInput.total;
           app.iapDownloadState = "准备下载";

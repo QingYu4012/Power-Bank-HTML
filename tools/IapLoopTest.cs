@@ -30,6 +30,7 @@ namespace H20IapLoopTest
         public uint AppKey;
         public uint BootState;
         public uint AppSize;
+        public uint AppCapacity;
         public uint AppCrc32;
         public uint ObCrc32;
         public uint FileProtocol;
@@ -360,7 +361,7 @@ namespace H20IapLoopTest
                 return 2;
 
             byte[] image = File.ReadAllBytes(imagePath);
-            if (image.Length == 0 || image.Length > 0x9E00)
+            if (image.Length == 0)
             {
                 Console.Error.WriteLine("镜像大小非法：{0} 字节", image.Length);
                 return 2;
@@ -494,6 +495,19 @@ namespace H20IapLoopTest
             byte[] transferData = protocol.IsYmodem ? Clone(image) : PadImage(image, protocol.BlockSize);
             uint expectedCrc = Crc32(transferData);
             uint expectedSize = (uint)transferData.Length;
+            if (before.AppCapacity < 8)
+                throw new InvalidDataException("设备Option Bytes未提供有效APP容量，请先使用J-Link更新BootLoader");
+            if (expectedSize > before.AppCapacity)
+                throw new InvalidDataException(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "镜像超过设备APP容量：{0} > {1}",
+                    expectedSize,
+                    before.AppCapacity));
+            log.Write(string.Format(
+                CultureInfo.InvariantCulture,
+                "设备APP容量={0}，本次传输={1}",
+                before.AppCapacity,
+                expectedSize));
 
             EnterUpdateMode(link, before);
             SetTransferInfo(link, expectedSize, expectedCrc);
@@ -751,6 +765,7 @@ namespace H20IapLoopTest
             parsed.ObCrc32 = data.Length >= 20 ? ReadUInt32(data, 16) : 0;
             parsed.FileProtocol = data.Length >= 24 ? ReadUInt32(data, 20) : 0;
             parsed.FileSize = data.Length >= 28 ? ReadUInt32(data, 24) : 0;
+            parsed.AppCapacity = data.Length >= 100 ? ReadUInt32(data, 96) : 0;
             uint nameLength = data.Length >= 32 ? ReadUInt32(data, 28) : 0;
             if (nameLength > 64)
                 nameLength = 64;
