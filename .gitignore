@@ -12,6 +12,9 @@
 **/playwright-report/
 **/blob-report/
 **/.nyc_output/
+**/.lighthouseci/
+*.har
+*.trace.zip
 *.o
 *.obj
 *.d
