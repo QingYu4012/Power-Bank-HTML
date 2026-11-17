@@ -57,7 +57,12 @@ Desktop.ini
 *.swo
 *~
 ~$*.docx
+~$*.doc
+~$*.docm
+*.wbk
+*.asd
 *.orig
+*.rej
 
 # 本地环境变量
 .env

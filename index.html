@@ -540,11 +540,54 @@
         color: var(--ok);
         background: rgba(98, 247, 162, 0.35);
       }
-      .empty {
-        height: 100px;
-        border-radius: 10px;
-        border: 1px solid rgba(142, 197, 255, 0.22);
-        background: linear-gradient(180deg, var(--sub), rgba(17, 42, 74, 0.66));
+      .abnormal-count {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 400;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .abnormal-list {
+        display: grid;
+        gap: 10px;
+        max-height: 360px;
+        overflow-y: auto;
+      }
+      .abnormal-record {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) max-content;
+        align-items: center;
+        gap: 12px;
+      }
+      .abnormal-detail {
+        min-width: 0;
+      }
+      .abnormal-time {
+        display: block;
+        margin-top: 4px;
+        font-variant-numeric: tabular-nums;
+      }
+      .abnormal-value {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        color: var(--neon);
+        font-size: 16px;
+        font-weight: 700;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .abnormal-unit {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 400;
+      }
+      .abnormal-empty {
+        padding: 24px 12px;
+        color: var(--muted);
+        font-size: 13px;
+        text-align: center;
       }
       .dev {
         height: 100%;
@@ -681,15 +724,26 @@
       .cell-info-admin .f {
         min-height: 42px;
       }
-      .cmd-response {
-        border-radius: 10px;
-        border: 1px solid rgba(142, 197, 255, 0.22);
-        background: rgba(9, 27, 52, 0.72);
-        color: var(--text);
-        padding: 12px;
-        white-space: pre-wrap;
+      .cell-info-edit-row {
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr) 18px;
+        align-items: center;
+        gap: 10px;
+      }
+      .cell-info-edit-row > label:first-child {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .cell-info-edit-row .f {
+        min-width: 0;
+      }
+      .cell-info-edit-row .check {
+        justify-content: center;
+      }
+      .cell-info-values .v {
+        white-space: normal;
         overflow-wrap: anywhere;
-        font: 12px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
       }
       .iap {
         height: 100%;
@@ -1127,6 +1181,8 @@
         font-size: 12px;
         box-shadow: var(--shadow);
         animation: ti 0.18s ease;
+        white-space: pre-line;
+        overflow-wrap: anywhere;
       }
       @keyframes ti {
         from {
@@ -1497,15 +1553,30 @@
                 <div class="u"></div>
               </div>
             </div>
-            <div class="sub">
+            <div class="sub cell-info-values">
               <div class="kv">
                 <div class="k">电芯型号：</div>
                 <div id="cellInfoModel" class="v">---</div>
                 <div class="u"></div>
               </div>
               <div class="kv">
-                <div class="k">电芯编码：</div>
-                <div id="cellInfoCode" class="v">---</div>
+                <div class="k">电芯编码 1：</div>
+                <div id="cellInfoCode1" class="v">---</div>
+                <div class="u"></div>
+              </div>
+              <div class="kv">
+                <div class="k">电芯编码 2：</div>
+                <div id="cellInfoCode2" class="v">---</div>
+                <div class="u"></div>
+              </div>
+              <div class="kv">
+                <div class="k">电芯编码 3：</div>
+                <div id="cellInfoCode3" class="v">---</div>
+                <div class="u"></div>
+              </div>
+              <div class="kv">
+                <div class="k">电芯编码 4：</div>
+                <div id="cellInfoCode4" class="v">---</div>
                 <div class="u"></div>
               </div>
             </div>
@@ -1521,9 +1592,10 @@
         <article class="card">
           <div class="head">
             <span style="color: #ff9fb0">⚠</span><span>异常信息</span>
+            <span id="abnormalRecordCount" class="abnormal-count" aria-live="polite">--- 条记录</span>
           </div>
           <div class="line"></div>
-          <div class="empty"></div>
+          <div id="abnormalInfo" class="abnormal-list" role="list" aria-label="异常历史记录"><div class="sub abnormal-empty">正在读取</div></div>
         </article>
       </main>
 
@@ -1702,30 +1774,45 @@
                     Cell_Info 设置与回读
                   </div>
                   <div id="cellInfoSetTip" class="note ok">未读取电芯信息</div>
-                  <input
-                    id="cellInfoModelInput"
-                    class="f"
-                    type="text"
-                    maxlength="24"
-                    placeholder="电芯型号（A-Z、0-9、-，1-24字符）"
-                  />
-                  <input
-                    id="cellInfoCodeInput"
-                    class="f"
-                    type="text"
-                    maxlength="24"
-                    placeholder="电芯编码（A-Z、0-9、-，1-24字符）"
-                  />
-                  <div class="cg two admin-test-actions">
-                    <button id="sendGetCellInfoBtn" class="b" type="button">
-                      读取电芯信息</button
-                    ><button id="sendSetCellModelBtn" class="b" type="button">
-                      设置电芯型号
-                    </button>
+                  <div class="cell-info-edit-row">
+                    <label for="cellInfoModelInput">电芯型号</label>
+                    <input id="cellInfoModelInput" class="f" type="text" maxlength="24" placeholder="A-Z、0-9、-，1-24字符" />
+                    <label class="check" title="选择设置电芯型号">
+                      <input id="cellInfoModelSelected" type="checkbox" aria-label="选择设置电芯型号" />
+                    </label>
                   </div>
-                  <button id="sendSetCellCodeBtn" class="b full" type="button">
-                    设置电芯编码
-                  </button>
+                  <div class="cell-info-edit-row">
+                    <label for="cellInfoCodeInput1">编码 1</label>
+                    <input id="cellInfoCodeInput1" class="f" type="text" maxlength="24" placeholder="A-Z、0-9、-，1-24字符" />
+                    <label class="check" title="选择设置编码 1">
+                      <input id="cellInfoCodeSelected1" type="checkbox" aria-label="选择设置编码 1" />
+                    </label>
+                  </div>
+                  <div class="cell-info-edit-row">
+                    <label for="cellInfoCodeInput2">编码 2</label>
+                    <input id="cellInfoCodeInput2" class="f" type="text" maxlength="24" placeholder="A-Z、0-9、-，1-24字符" />
+                    <label class="check" title="选择设置编码 2">
+                      <input id="cellInfoCodeSelected2" type="checkbox" aria-label="选择设置编码 2" />
+                    </label>
+                  </div>
+                  <div class="cell-info-edit-row">
+                    <label for="cellInfoCodeInput3">编码 3</label>
+                    <input id="cellInfoCodeInput3" class="f" type="text" maxlength="24" placeholder="A-Z、0-9、-，1-24字符" />
+                    <label class="check" title="选择设置编码 3">
+                      <input id="cellInfoCodeSelected3" type="checkbox" aria-label="选择设置编码 3" />
+                    </label>
+                  </div>
+                  <div class="cell-info-edit-row">
+                    <label for="cellInfoCodeInput4">编码 4</label>
+                    <input id="cellInfoCodeInput4" class="f" type="text" maxlength="24" placeholder="A-Z、0-9、-，1-24字符" />
+                    <label class="check" title="选择设置编码 4">
+                      <input id="cellInfoCodeSelected4" type="checkbox" aria-label="选择设置编码 4" />
+                    </label>
+                  </div>
+                  <div class="cg two admin-test-actions">
+                    <button id="sendGetCellInfoBtn" class="b" type="button">读取电芯信息</button>
+                    <button id="sendSetCellInfoBtn" class="b" type="button">设置电芯信息</button>
+                  </div>
                 </div>
                 <button id="openIapBtn" class="b full" type="button">
                   更新程序
@@ -1887,21 +1974,6 @@
       </div>
     </div>
 
-    <div id="commandResponseModal" class="m">
-      <div class="d s">
-        <div class="dh">
-          <div id="commandResponseTitle" class="dtit">命令返回</div>
-        </div>
-        <div class="db">
-          <div id="commandResponseBody" class="cmd-response">暂无返回数据</div>
-        </div>
-        <div class="df">
-          <button id="closeCommandResponseBtn" class="b" type="button">
-            确定
-          </button>
-        </div>
-      </div>
-    </div>
 
     <div id="toastWrap" class="tw"></div>
 
@@ -1917,6 +1989,14 @@
           CMD_SET_TEST = 0x07,
           CMD_GET_CELL_INFO = 0x08,
           CMD_SET_CELL_INFO = 0x09;
+        /* 查询电池异常历史摘要的命令。 */
+        const CMD_GET_ABNORMAL_INFO = 0x0a;
+        /* 查询电池异常历史分页的命令。 */
+        const CMD_GET_ABNORMAL_PAGE = 0x0b;
+        /* 上位机固定显示四个编码槽，并读取编号一至四。 */
+        const CELL_INFO_NUM = 4;
+        /* 电芯设置应答及读取应答的等待时间，单位为毫秒。 */
+        const CELL_INFO_TIMEOUT_MS = 3000;
         const IAP_CMD_GET_ACK = 0x00,
           IAP_CMD_GET_OPTION_BYTES = 0x01,
           IAP_CMD_SET_BOOT_STATE = 0x02,
@@ -2119,6 +2199,8 @@
           projectInfo: null,
           cellInfo: null,
           portsInfo: null,
+          /* 电池异常历史的查询事务和已完成数据。 */
+          abnormal: defAbnormal(),
           dev: false,
           iap: false,
           tapCount: 0,
@@ -2138,6 +2220,8 @@
           tx: 0,
           rx: 0,
           logs: [],
+          /* 透传日志清空代次，用于丢弃清空前启动的异步发送记录。 */
+          logGeneration: 0,
           getDataType: 0,
           getRtcFmt: 0,
           setRtcFmt: 0,
@@ -2157,7 +2241,12 @@
            */
           testEdited: false,
           cellInfoSetTip: "未读取电芯信息",
+          /* 当前等待应答的电芯读取事务。 */
+          pendingCellRead: null,
+          /* 当前等待设置确认或回读校验的电芯写入事务。 */
           pendingCellWrite: null,
+          /* 当前按勾选字段串行执行的电芯设置批次。 */
+          cellInfoWriteBatch: null,
           lastCmdNano: 0,
           phoneMs: Date.now(),
           pbMs: new Date(2026, 2, 31, 0, 0, 0, 0).getTime(),
@@ -2256,7 +2345,8 @@
           projectSoftwareVersion: gid("projectSoftwareVersion"),
           projectProductDate: gid("projectProductDate"),
           cellInfoModel: gid("cellInfoModel"),
-          cellInfoCode: gid("cellInfoCode"),
+          /* 四条电芯编码的数据显示控件，数组下标对应编号减一。 */
+          cellInfoCodes: [gid("cellInfoCode1"), gid("cellInfoCode2"), gid("cellInfoCode3"), gid("cellInfoCode4")],
           portInfoList: gid("portInfoList"),
           passthroughReadyText: gid("passthroughReadyText"),
           exitDevBtn: gid("exitDevBtn"),
@@ -2305,10 +2395,15 @@
           sendSetTestBtn: gid("sendSetTestBtn"),
           cellInfoSetTip: gid("cellInfoSetTip"),
           cellInfoModelInput: gid("cellInfoModelInput"),
-          cellInfoCodeInput: gid("cellInfoCodeInput"),
+          /* 公共型号的设置勾选框。 */
+          cellInfoModelSelected: gid("cellInfoModelSelected"),
+          /* 四条编码输入框，数组下标对应编号减一。 */
+          cellInfoCodeInputs: [gid("cellInfoCodeInput1"), gid("cellInfoCodeInput2"), gid("cellInfoCodeInput3"), gid("cellInfoCodeInput4")],
+          /* 四条编码各自的设置勾选框。 */
+          cellInfoCodeSelected: [gid("cellInfoCodeSelected1"), gid("cellInfoCodeSelected2"), gid("cellInfoCodeSelected3"), gid("cellInfoCodeSelected4")],
           sendGetCellInfoBtn: gid("sendGetCellInfoBtn"),
-          sendSetCellModelBtn: gid("sendSetCellModelBtn"),
-          sendSetCellCodeBtn: gid("sendSetCellCodeBtn"),
+          /* 按勾选项提交公共型号和编码的统一设置按钮。 */
+          sendSetCellInfoBtn: gid("sendSetCellInfoBtn"),
           openIapBtn: gid("openIapBtn"),
           iapView: gid("iapView"),
           iapStateText: gid("iapStateText"),
@@ -2343,10 +2438,6 @@
           adminLoginError: gid("adminLoginError"),
           cancelAdminBtn: gid("cancelAdminBtn"),
           confirmAdminBtn: gid("confirmAdminBtn"),
-          commandResponseModal: gid("commandResponseModal"),
-          commandResponseTitle: gid("commandResponseTitle"),
-          commandResponseBody: gid("commandResponseBody"),
-          closeCommandResponseBtn: gid("closeCommandResponseBtn"),
           toastWrap: gid("toastWrap"),
         };
 
@@ -2381,8 +2472,9 @@
             productDate: "---",
           };
         }
+        /* 创建一个公共型号和四个编码槽的默认显示数据。 */
         function defCellInfo() {
-          return { model: "---", code: "---" };
+          return { model: "---", codes: Array(CELL_INFO_NUM).fill("---") };
         }
         function defPorts() {
           const m = new Map();
@@ -2596,12 +2688,24 @@
           el.productionDate.textContent = d.productionDate;
           el.batchSerialNumber.textContent = d.batchSerialNumber;
         }
+        /* 刷新公共型号及四条编码，并同步整批电芯操作期间的控件状态。 */
         function renderDeviceInfo() {
+          /* 整批读取或设置完成前，避免用户交叉提交电芯操作。 */
+          const busy = !!app.pendingCellRead || !!app.pendingCellWrite || !!app.cellInfoWriteBatch;
           el.projectHardwareVersion.textContent = app.projectInfo.hardwareVersion;
           el.projectSoftwareVersion.textContent = app.projectInfo.softwareVersion;
           el.projectProductDate.textContent = app.projectInfo.productDate;
           el.cellInfoModel.textContent = app.cellInfo.model;
-          el.cellInfoCode.textContent = app.cellInfo.code;
+          el.cellInfoModelInput.disabled = busy;
+          el.cellInfoModelSelected.disabled = busy;
+          /* 每个编号只更新自己的显示和输入控件状态。 */
+          for (let index = 0; index < CELL_INFO_NUM; index++) {
+            el.cellInfoCodes[index].textContent = app.cellInfo.codes[index];
+            el.cellInfoCodeInputs[index].disabled = busy;
+            el.cellInfoCodeSelected[index].disabled = busy;
+          }
+          el.sendGetCellInfoBtn.disabled = busy;
+          el.sendSetCellInfoBtn.disabled = busy;
           if (el.cellInfoSetTip) el.cellInfoSetTip.textContent = app.cellInfoSetTip;
         }
         const protErr = (e) =>
@@ -2753,6 +2857,7 @@
           renderBat();
           renderDeviceInfo();
           renderPorts();
+          renderAbnormal();
           renderCounter();
           renderLogs();
           renderDev();
@@ -3073,13 +3178,8 @@
           });
           app.iapWaiters = [];
         }
-        async function sendIapCommand(
-          name,
-          cmd,
-          data = new Uint8Array(),
-          tip = false,
-          transferInput = null,
-        ) {
+        /* 发送IAP命令，name为名称，cmd为命令，data为载荷，tip控制提示，transferInput限定升级上下文。 */
+        async function sendIapCommand(name, cmd, data = new Uint8Array(), tip = false, transferInput = null) {
           if (transferInput && !isIapCommandContextActive(transferInput))
             return false;
           if (!app.isConnected || !app.writer) {
@@ -3094,6 +3194,8 @@
             renderIap();
             return false;
           }
+          /* 固定发送开始时的日志代次，清空后丢弃这次发送的旧记录。 */
+          const logGeneration = app.logGeneration;
           const writeGeneration = app.serialGeneration,
             writeWriter = app.writer,
             operationGeneration = transferInput
@@ -3123,7 +3225,7 @@
               (transferInput && !isIapCommandContextActive(transferInput))
             )
               return false;
-            addLog("发送", frame);
+            addLog("发送", frame, logGeneration);
             addIapLog(`${name} -> ${shortHex(frame, 64)}`);
             return true;
           } catch (_) {
@@ -3535,12 +3637,15 @@
           const t = app.iapTransfer;
           return !!(app.iap || app.iapCanceling || (t && t.active));
         }
+        /* 发送IAP数据流，bytes为数据，label为日志说明，transferInput限定升级上下文。 */
         async function writeIapStream(bytes, label = "", transferInput = null) {
           if (transferInput && !isIapOperationActive(transferInput)) return false;
           if (!app.isConnected || !app.writer) {
             failIapDownload("设备未连接", transferInput);
             return false;
           }
+          /* 固定发送开始时的日志代次，清空后丢弃这次发送的旧记录。 */
+          const logGeneration = app.logGeneration;
           const writeGeneration = app.serialGeneration,
             writeWriter = app.writer,
             operationGeneration = transferInput
@@ -3590,7 +3695,7 @@
               (transferInput && !isIapOperationActive(transferInput))
             )
               return false;
-            addLog("发送", bytes);
+            addLog("发送", bytes, logGeneration);
             if (label) addIapLog(`${label} -> ${shortHex(bytes)}`);
             return true;
           } catch (_) {
@@ -4372,6 +4477,11 @@
         function iapMode(on, backToDev = true) {
           app.iap = on;
           if (on) {
+            /* 进入升级页面时终止普通电芯批次，防止后续编号继续发送。 */
+            if (app.pendingCellRead || app.pendingCellWrite || app.cellInfoWriteBatch) {
+              app.pendingCellInfo = true;
+              cancelCellInfoTransactions("已结束电芯操作并进入更新程序界面");
+            }
             app.dev = false;
             stopPoll();
             startIapAckPoll();
@@ -4399,7 +4509,10 @@
             o[i / 2] = parseInt(c.slice(i, i + 2), 16);
           return o;
         }
-        function addLog(dir, p) {
+        /* 添加透传收发记录，dir为方向，p为数据，generation限定记录所属的清空代次。 */
+        function addLog(dir, p, generation = app.logGeneration) {
+          if (generation !== app.logGeneration)
+            return;
           const cp = p instanceof Uint8Array ? p.slice() : new Uint8Array(p);
           app.logs.push({ dir, ts: Date.now(), p: cp });
           if (app.logs.length > 500) app.logs = app.logs.slice(-500);
@@ -4537,45 +4650,28 @@
           }
           app.lastCmdNano = nano();
         }
-        async function qwrite(
-          bytes,
-          th = false,
-          generation = app.serialGeneration,
-          writer = app.writer,
-          operationGeneration = null,
-        ) {
-          const payload =
-              bytes instanceof Uint8Array
-                ? bytes.slice()
-                : new Uint8Array(bytes || []);
-          if (!writer) throw new Error("writer missing");
-          app.writeQ = app.writeQ
-            .catch(() => undefined)
-            .then(async () => {
-              if (
-                generation !== app.serialGeneration ||
-                writer !== app.writer ||
-                (operationGeneration != null &&
-                  operationGeneration !== app.iapOperationGeneration)
-              )
-                throw new Error("stale serial write");
-              if (th) await throttle();
-              if (
-                generation !== app.serialGeneration ||
-                writer !== app.writer ||
-                (operationGeneration != null &&
-                  operationGeneration !== app.iapOperationGeneration)
-              )
-                throw new Error("stale serial write");
-              await writer.write(payload);
-              if (
-                generation !== app.serialGeneration ||
-                writer !== app.writer ||
-                (operationGeneration != null &&
-                  operationGeneration !== app.iapOperationGeneration)
-              )
-                throw new Error("stale serial write");
-            });
+        /* 串行写入串口，bytes为待发数据，th控制节流，generation与writer限定连接，operationGeneration限定IAP操作，pollToken限定异常轮询。 */
+        async function qwrite(bytes, th = false, generation = app.serialGeneration, writer = app.writer, operationGeneration = null, pollToken = null) {
+          /* 固化本次发送内容，避免排队期间被调用方修改。 */
+          const payload = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes || []);
+          if (!writer)
+            throw new Error("writer missing");
+          /* 写队列执行时复核连接、升级操作和异常轮询上下文。 */
+          const operation = async () => {
+            if (generation !== app.serialGeneration || writer !== app.writer || (operationGeneration != null && operationGeneration !== app.iapOperationGeneration))
+              throw new Error("stale serial write");
+            if (th)
+              await throttle();
+            if (generation !== app.serialGeneration || writer !== app.writer || (operationGeneration != null && operationGeneration !== app.iapOperationGeneration))
+              throw new Error("stale serial write");
+            /* 异常查询实际写入前再次检查页面与事务状态，取消已排队的旧请求。 */
+            if (pollToken != null && (pollToken !== app.dataToken || app.dev || isIapSerialBusy() || app.pendingCellRead || app.pendingCellWrite || app.cellInfoWriteBatch))
+              return false;
+            await writer.write(payload);
+            if (generation !== app.serialGeneration || writer !== app.writer || (operationGeneration != null && operationGeneration !== app.iapOperationGeneration))
+              throw new Error("stale serial write");
+          };
+          app.writeQ = app.writeQ.catch(() => undefined).then(operation);
           return app.writeQ;
         }
         function crc8(p) {
@@ -4632,7 +4728,7 @@
             }
             const cmd = buf[idx + 2] & 255,
               len = (buf[idx + 3] & 255) | ((buf[idx + 4] & 255) << 8);
-            if ((cmd & 0x7f) > CMD_SET_CELL_INFO) {
+            if ((cmd & 0x7f) > CMD_GET_ABNORMAL_PAGE) {
               idx++;
               continue;
             }
@@ -4703,19 +4799,25 @@
             productDate: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
           };
         }
+        /* 按固定带编号格式解析电芯信息，raw为响应载荷。 */
         function parseCellInfo(raw) {
-          if (!raw || raw.length < 4) return null;
-          const modelLen = raw[0] & 255,
-            codeLenPos = 1 + modelLen;
-          if (modelLen < 1 || modelLen > 24 || codeLenPos >= raw.length)
-            return null;
+          if (!raw || raw.length < 5) return null;
+          /* 响应回显的编码编号，从一开始。 */
+          const index = raw[0] & 255;
+          /* 公共型号的ASCII字节数。 */
+          const modelLen = raw[1] & 255;
+          /* 编码长度字节在载荷中的位置。 */
+          const codeLenPos = 2 + modelLen;
+          if (index < 1 || index > CELL_INFO_NUM || modelLen < 1 || modelLen > 24 || codeLenPos >= raw.length) return null;
+          /* 当前编号编码的ASCII字节数。 */
           const codeLen = raw[codeLenPos] & 255;
-          if (codeLen < 1 || codeLen > 24 || codeLenPos + 1 + codeLen !== raw.length)
-            return null;
-          const model = ascii(raw.slice(1, codeLenPos)),
-            code = ascii(raw.slice(codeLenPos + 1));
-          if (!model || !code) return null;
-          return { model, code };
+          if (codeLen < 1 || codeLen > 24 || codeLenPos + 1 + codeLen !== raw.length) return null;
+          /* 严格保留原始型号字符，避免去空格或替换零字节掩盖非法响应。 */
+          const model = String.fromCharCode(...raw.slice(2, codeLenPos));
+          /* 当前编号的原始编码文本。 */
+          const code = String.fromCharCode(...raw.slice(codeLenPos + 1));
+          if (!/^[A-Z0-9-]{1,24}$/.test(model) || !/^[A-Z0-9-]{1,24}$/.test(code)) return null;
+          return { index, model, code };
         }
         function commandName(cmd) {
           const names = {
@@ -4729,12 +4831,17 @@
             [CMD_SET_TEST]: "USB_CMD_SET_TEST",
             [CMD_GET_CELL_INFO]: "USB_CMD_GET_CELL_INFO",
             [CMD_SET_CELL_INFO]: "USB_CMD_SET_CELL_INFO",
+            /* 异常摘要查询的日志名称。 */
+            [CMD_GET_ABNORMAL_INFO]: "USB_CMD_GET_ABNORMAL_INFO",
+            /* 异常历史分页查询的日志名称。 */
+            [CMD_GET_ABNORMAL_PAGE]: "USB_CMD_GET_ABNORMAL_PAGE",
           };
           return names[cmd & 0x7f] || `CMD 0x${(cmd & 255).toString(16).toUpperCase().padStart(2, "0")}`;
         }
+        /* 解释命令应答用于自动提示，rawCmd为命令字，payload为响应载荷。 */
         function commandMeaning(rawCmd, payload) {
-          const cmd = rawCmd & 0x7f,
-            rawText = payload && payload.length ? hex(payload) : "无";
+          /* 响应对应的普通数据命令。 */
+          const cmd = rawCmd & 0x7f;
           let meaning = "已收到合法CRC8响应帧";
           if (cmd === CMD_ACK)
             meaning = payload.length === 1 && payload[0] === 1 ? "设备数据协议连接正常" : "设备返回了连接状态";
@@ -4759,26 +4866,35 @@
             meaning = port
               ? `端口：${port.portId}\n状态：${outState(port.stableOutputState)}\n功率：${port.systemPort ? `${port.powerMw} mW` : "详见数据界面"}`
               : "端口数据格式无效或端口不存在";
-          } else if (cmd === CMD_GET_TEST && payload.length >= 2)
-            meaning = `测试参数ID：0x${(payload[0] & 255).toString(16).toUpperCase().padStart(2, "0")}\n设备值：${leInt(payload.slice(1), false)}`;
-          else if (cmd === CMD_SET_TEST)
+          } else if (cmd === CMD_GET_TEST) {
+            if (payload.length === 1 && payload[0] === 0) meaning = "获取测试数据失败：参数错误";
+            else if (payload.length >= 2) meaning = "测试参数ID：0x" + (payload[0] & 255).toString(16).toUpperCase().padStart(2, "0") + "\n设备值：" + leInt(payload.slice(1), false);
+            else meaning = "测试参数应答格式无效";
+          } else if (cmd === CMD_SET_TEST)
             meaning = payload[0] === 1 ? "测试参数设置成功，已触发回读" : "测试参数设置失败";
           else if (cmd === CMD_GET_CELL_INFO) {
+            /* 按固定带编号格式解析读取应答。 */
             const info = parseCellInfo(payload);
-            meaning = info ? `电芯型号：${info.model}\n电芯编码：${info.code}` : "电芯信息格式无效";
+            meaning = info ? "编码编号：" + info.index + "\n公共型号：" + info.model + "\n电芯编码：" + info.code : "电芯信息格式无效";
           } else if (cmd === CMD_SET_CELL_INFO) {
-            const field = payload[0] === 0 ? "电芯型号" : payload[0] === 1 ? "电芯编码" : "未知字段";
-            meaning = payload.length >= 2 && payload[1] === 0
-              ? `${field}设置成功，已触发回读校验`
-              : `${field}设置失败，结果码：${payload.length >= 2 ? payload[1] : "无"}`;
+            if (payload.length === 3) {
+              /* 设置应答第二字节为字段，第三字节为结果码。 */
+              const field = payload[1] === 0 ? "公共型号" : payload[1] === 1 ? "电芯编码" : "未知字段";
+              meaning = "编码编号：" + payload[0] + "\n设置字段：" + field + "\n结果码：" + payload[2] + "（" + cellInfoResultText(payload[2]) + "）";
+            } else {
+              meaning = "电芯设置应答格式无效，应为Index、Field、Result三字节";
+            }
           }
-          return `命令：${commandName(cmd)}\n数据长度：${payload.length} 字节\n原始数据：${rawText}\n\n具体含义：\n${meaning}`;
+          return commandName(cmd) + "\n" + meaning;
         }
+        /* 用自动消失的提示显示命令结果，rawCmd为命令字，payload为响应载荷。 */
         function showCommandResponse(rawCmd, payload) {
-          if (!app.dev || !el.commandResponseModal) return;
-          el.commandResponseTitle.textContent = `${commandName(rawCmd)} 返回`;
-          el.commandResponseBody.textContent = commandMeaning(rawCmd, payload);
-          el.commandResponseModal.classList.add("show");
+          /* 统一处理命令成功、失败及读取结果，正常数据轮询保持静默。 */
+          const cmd = rawCmd & 0x7f;
+          if (!app.dev && cmd !== CMD_SET_RTC && cmd !== CMD_GET_TEST && cmd !== CMD_SET_TEST) return;
+          /* 电芯批量设置由批次汇总结果，避免逐项确认和回读重复提示。 */
+          if (app.cellInfoWriteBatch && (cmd === CMD_GET_CELL_INFO || cmd === CMD_SET_CELL_INFO)) return;
+          toast(commandMeaning(rawCmd, payload), 4000);
         }
         function normDate(s) {
           const d = String(s || "").replace(/\D+/g, "");
@@ -5017,43 +5133,44 @@
             return;
           }
           if (cmd === CMD_GET_CELL_INFO) {
+            /* 当前读取批次及收到的编号化应答。 */
+            const read = app.pendingCellRead;
+            /* 已通过长度、编号和字符集校验的电芯数据。 */
             const info = parseCellInfo(p);
-            if (!info) return;
-            app.cellInfo = info;
-            app.pendingCellInfo = false;
-            el.cellInfoModelInput.value = info.model;
-            el.cellInfoCodeInput.value = info.code;
-            if (app.pendingCellWrite) {
-              const actual = app.pendingCellWrite.field === 0 ? info.model : info.code,
-                ok = actual === app.pendingCellWrite.expected;
-              app.cellInfoSetTip = ok
-                ? `${app.pendingCellWrite.label}设置并回读一致：${actual}`
-                : `${app.pendingCellWrite.label}回读不一致：期望${app.pendingCellWrite.expected}，实际${actual}`;
-              toast(app.cellInfoSetTip);
-              app.pendingCellWrite = null;
-            } else {
-              app.cellInfoSetTip = `已读取：型号 ${info.model}，编码 ${info.code}`;
-            }
+            if (!read || !info || read.generation !== app.serialGeneration || !read.sent.has(info.index) || !read.pending.has(info.index)) return;
+            read.pending.delete(info.index);
+            app.cellInfo.model = info.model;
+            app.cellInfo.codes[info.index - 1] = info.code;
+            /* 已编辑或勾选的输入保留用户待发送值，避免回读覆盖后续设置。 */
+            if (!read.write && !el.cellInfoModelSelected.checked && el.cellInfoModelInput.dataset.cellInfoEdited !== "1") el.cellInfoModelInput.value = info.model;
+            if (!read.write && !el.cellInfoCodeSelected[info.index - 1].checked && el.cellInfoCodeInputs[info.index - 1].dataset.cellInfoEdited !== "1") el.cellInfoCodeInputs[info.index - 1].value = info.code;
             renderDeviceInfo();
+            /* 设置回读只校验本次固定的编号、字段和期望文本。 */
+            const write = app.pendingCellWrite;
+            if (write && read.write === write && write.phase === "read" && info.index === write.index) {
+              /* 被设置字段的实际回读文本。 */
+              const actual = write.field === 0 ? info.model : info.code;
+              /* 与点击设置时捕获的文本逐字符比较。 */
+              const ok = actual === write.expected;
+              finishCellInfoTransaction(ok ? write.label + "设置并回读一致" : write.label + "回读不一致：期望" + write.expected + "，实际" + actual, false, { ok, stop: false });
+            } else if (!read.sending && read.pending.size === 0) {
+              finishCellInfoRead(read);
+            }
             return;
           }
           if (cmd === CMD_SET_CELL_INFO) {
-            if (!p || p.length < 2) return;
-            if ((p[1] & 255) === 0) {
-              app.cellInfoSetTip = "设置完成，正在回读校验...";
-              renderDeviceInfo();
-              void sendData(CMD_GET_CELL_INFO);
-            } else {
-              app.cellInfoSetTip = `电芯信息设置失败，结果码：${p[1] & 255}`;
-              app.pendingCellWrite = null;
-              renderDeviceInfo();
-              toast(app.cellInfoSetTip);
+            /* 当前等待设备确认的单项设置事务。 */
+            const write = app.pendingCellWrite;
+            if (!write || write.generation !== app.serialGeneration || write.phase !== "ack" || !p || p.length !== 3) return;
+            if (p[0] !== write.index || p[1] !== write.field) return;
+            if (p[2] !== 0) {
+              finishCellInfoTransaction(write.label + "设置失败，结果码" + p[2] + "：" + cellInfoResultText(p[2]), false, { ok: false, stop: false });
+              return;
             }
-            return;
-          }
-          if (cmd === CMD_SET_RTC) {
-            if (p && p.length === 1 && (p[0] & 255) === 1)
-              toast("RTC同步成功");
+            clearTimeout(write.timer);
+            write.timer = null;
+            write.phase = "read";
+            void sendGetCellInfo(false, write);
             return;
           }
           if (cmd === CMD_RTC) {
@@ -5245,7 +5362,6 @@
             if (!p.length) return;
             if (p.length === 1 && (p[0] & 255) === 0x00) {
               app.testTip = "获取测试数据失败：参数错误";
-              toast(app.testTip);
               renderTestUi();
               return;
             }
@@ -5271,15 +5387,248 @@
             } else if ((p[0] & 255) === 0x00) {
               app.testTip = "发送测试数据失败：参数错误";
               renderTestUi();
-              toast(app.testTip);
             }
           }
+        }
+        /* 创建异常历史状态，摘要与记录仅在整批校验通过后提交。 */
+        function defAbnormal() {
+          return {
+            /* 最近一次完整读取的九字节摘要。 */
+            summary: null,
+            /* 最近一次完整读取的历史记录。 */
+            records: [],
+            /* 当前批次开始时的摘要。 */
+            draftSummary: null,
+            /* 当前批次尚未提交的历史记录。 */
+            draftRecords: [],
+            /* 下一次需要读取的页号，从零开始。 */
+            nextPage: 0,
+            /* 下一步查询阶段，依次为摘要、分页和结束核验。 */
+            phase: "summary",
+            /* 当前唯一等待中的异常查询。 */
+            pending: null,
+            /* 下一次允许查询的时间，单位为毫秒。 */
+            nextAt: 0,
+            /* 当前查询进度或错误说明。 */
+            message: "未读取异常历史",
+          };
+        }
+        /* 中止当前异常批次，message为状态说明，delay为重读等待时间，单位为毫秒。 */
+        function restartAbnormal(message, delay = 5000) {
+          app.abnormal.pending = null;
+          app.abnormal.draftSummary = null;
+          app.abnormal.draftRecords = [];
+          app.abnormal.phase = "summary";
+          app.abnormal.nextPage = 0;
+          app.abnormal.nextAt = Date.now() + delay;
+          app.abnormal.message = message;
+          renderAbnormal();
+        }
+        /* 显示已完成读取的记录数量及历史列表，记录时间沿用现有RTC口径。 */
+        function renderAbnormal() {
+          /* 异常历史的记录列表容器。 */
+          const box = gid("abnormalInfo");
+          /* 异常卡片标题右侧的有效记录数量。 */
+          const count = gid("abnormalRecordCount");
+          if (!box || !count)
+            return;
+          /* 仅统计整批读取及核验完成后提交的有效记录。 */
+          const records = app.abnormal.records;
+          /* 首次读取完成前使用占位，完成后显示实际记录数量，单位为条。 */
+          const countText = (app.abnormal.summary ? records.length : "---") + " 条记录";
+          if (count.textContent !== countText)
+            count.textContent = countText;
+          /* 查询状态通过数量提示保留，卡片正文仅展示记录。 */
+          count.title = app.isConnected ? app.abnormal.message : "未连接设备";
+          /* 协议定义的四类历史记录名称。 */
+          const names = ["", "电压异常", "待机过温", "充电过温", "放电过温"];
+          /* 本次渲染的记录卡片内容。 */
+          const items = [];
+          /* 保持设备返回顺序，保留相同时间戳的多条记录。 */
+          for (const record of records) {
+            /* 按现有RTC口径换算的记录时间，单位为毫秒。 */
+            const ms = record.unix * 1000 - BEIJING_OFFSET;
+            /* 电压异常补充对应电芯，温度异常直接显示工作状态。 */
+            const label = names[record.type] + (record.type === 1 ? " · 电芯" + record.cell : "");
+            /* 电压单位为毫伏，温度单位为摄氏度。 */
+            const unit = record.type === 1 ? "mV" : "℃";
+            items.push('<div class="sub abnormal-record" role="listitem"><div class="abnormal-detail"><div class="pt">' + esc(label) + '</div><time class="ps abnormal-time" datetime="' + new Date(ms).toISOString() + '">' + esc(fDate(ms) + " " + fTime(ms)) + '</time></div><div class="abnormal-value">' + esc(String(record.value)) + '<span class="abnormal-unit">' + unit + '</span></div></div>');
+          }
+          /* 首次读取期间显示正在读取，完成空历史后显示暂无异常记录。 */
+          const content = items.length ? items.join("") : '<div class="sub abnormal-empty">' + (app.abnormal.summary ? "暂无异常记录" : "正在读取") + "</div>";
+          /* 查询进度变化时复用现有列表，数据更新时保留用户滚动位置。 */
+          if (box.innerHTML !== content) {
+            /* 列表当前滚动偏移，单位为像素。 */
+            const scrollTop = box.scrollTop;
+            box.innerHTML = content;
+            box.scrollTop = scrollTop;
+          }
+        }
+        /* 校验异常载荷，cmd为命令字，p为已通过公共CRC8校验的响应。 */
+        function validAbnormalPayload(cmd, p) {
+          if (!p || !p.length || p[0] > 4)
+            return false;
+          if (cmd === CMD_GET_ABNORMAL_INFO) {
+            if (p.length !== 9)
+              return false;
+            if (p[0] !== 0)
+              return p.slice(1).every((value) => value === 0);
+            /* 原始过温记录数量，单位为条。 */
+            const tempCount = leInt(p.slice(2, 4), false);
+            /* 原始电压记录数量，单位为条。 */
+            const voltageCount = leInt(p.slice(4, 6), false);
+            /* 固件最多规划六十条记录。 */
+            const count = Math.min(tempCount + voltageCount, 60);
+            return (p[1] & 0xfc) === 0 && tempCount <= 256 && voltageCount <= 256 && (!tempCount || (p[1] & 1) !== 0) && (!voltageCount || (p[1] & 2) !== 0) && p[6] === count && p[7] === Math.ceil(count / 3) && p[8] === 3;
+          }
+          if (cmd !== CMD_GET_ABNORMAL_PAGE || p.length < 4 || p[2] > 20 || p[3] > 3 || p.length !== 4 + p[3] * 8)
+            return false;
+          if (p[0] !== 0)
+            return p.length === 4 && p[3] === 0 && (p[0] > 2 || p[2] === 0);
+          if (p[2] === 0)
+            return p[1] === 0 && p[3] === 0;
+          if (p[1] >= p[2])
+            return false;
+          /* 每条记录固定八字节，类型和电芯编号按协议校验。 */
+          for (let offset = 4; offset < p.length; offset += 8) {
+            /* 当前记录的异常类型。 */
+            const type = p[offset];
+            /* 电压记录对应的电芯编号。 */
+            const cell = p[offset + 1];
+            if (type < 1 || type > 4 || (type === 1 ? cell < 1 || cell > 4 : cell !== 0))
+              return false;
+            /* 温度为整数摄氏度，允许负温度并按固件范围校验。 */
+            const value = leInt(p.slice(offset + 2, offset + 4), type !== 1);
+            if (type !== 1 && (value < -99 || value > 99))
+              return false;
+          }
+          return true;
+        }
+        /* 接收异常查询应答，rawCmd为命令字，p为CRC8校验后的载荷。 */
+        function onAbnormalFrame(rawCmd, p) {
+          /* 去除现有协议兼容的命令高位。 */
+          const cmd = rawCmd & 0x7f;
+          if (cmd !== CMD_GET_ABNORMAL_INFO && cmd !== CMD_GET_ABNORMAL_PAGE)
+            return;
+          /* 当前等待的唯一异常请求。 */
+          const request = app.abnormal.pending;
+          if (!request || request.cmd !== cmd || request.generation !== app.serialGeneration || request.token !== app.dataToken || app.dev || isIapSerialBusy())
+            return;
+          /* 错页或迟到页不能完成当前请求。 */
+          if (cmd === CMD_GET_ABNORMAL_PAGE && (!p || p.length < 2 || p[1] !== request.page))
+            return;
+          if (!validAbnormalPayload(cmd, p)) {
+            restartAbnormal("异常应答格式错误，稍后从摘要重读");
+            return;
+          }
+          app.abnormal.pending = null;
+          if (p[0] !== 0) {
+            /* 协议共用结果码的业务说明。 */
+            const results = ["查询成功", "请求参数错误", "CBM8570离线", "页号越界", "异常历史读取失败"];
+            restartAbnormal(results[p[0]] + "，稍后从摘要重读");
+            return;
+          }
+          if (cmd === CMD_GET_ABNORMAL_INFO) {
+            if (app.abnormal.phase === "verify") {
+              /* 前后摘要变化时丢弃本轮分页，下一轮重新从第零页读取。 */
+              if (!p.every((value, index) => value === app.abnormal.draftSummary[index])) {
+                restartAbnormal("异常历史已变化，正在重新读取", 1000);
+                return;
+              }
+              app.abnormal.summary = p.slice();
+              app.abnormal.records = app.abnormal.draftRecords;
+              restartAbnormal("异常历史读取完成");
+              return;
+            }
+            app.abnormal.draftSummary = p.slice();
+            app.abnormal.draftRecords = [];
+            app.abnormal.phase = "page";
+            app.abnormal.message = "正在读取异常历史第1页";
+          } else {
+            /* 分页规划变化时停止拼接，重新获取摘要。 */
+            if (p[2] !== app.abnormal.draftSummary[7] || app.abnormal.draftRecords.length + p[3] > app.abnormal.draftSummary[6]) {
+              restartAbnormal("异常页数已变化，正在重新读取", 1000);
+              return;
+            }
+            /* 读取所有规划页，零条有效记录的页也继续查询后续页。 */
+            for (let offset = 4; offset < p.length; offset += 8) {
+              /* 当前八字节记录的解码结果。 */
+              const record = {
+                /* 异常类型，一为电压，二至四为不同状态的过温。 */
+                type: p[offset],
+                /* 电芯编号，温度记录固定为零。 */
+                cell: p[offset + 1],
+                /* 电压单位为毫伏，温度单位为摄氏度。 */
+                value: leInt(p.slice(offset + 2, offset + 4), p[offset] !== 1),
+                /* 芯片历史时间戳，单位为秒。 */
+                unix: leInt(p.slice(offset + 4, offset + 8), false),
+              };
+              app.abnormal.draftRecords.push(record);
+            }
+            if (request.page + 1 >= Math.max(1, p[2])) {
+              app.abnormal.phase = "verify";
+              app.abnormal.message = "正在核对异常历史计数";
+            } else {
+              app.abnormal.phase = "page";
+              app.abnormal.message = "正在读取异常历史第" + (request.page + 2) + "页";
+            }
+          }
+          /* 保留下一页号，空历史也会实际读取第零页。 */
+          app.abnormal.nextPage = cmd === CMD_GET_ABNORMAL_INFO ? 0 : request.page + 1;
+          app.abnormal.nextAt = Date.now() + POLL_COMMAND_GAP_MS;
+          renderAbnormal();
+        }
+        /* 在正常轮询空隙发送一条异常查询，token为当前普通数据轮询代次。 */
+        async function pollAbnormal(token) {
+          if (token !== app.dataToken || !app.isConnected || app.dev || isIapSerialBusy())
+            return;
+          /* 电芯读写期间丢弃未完成批次，完成后重新获取完整历史。 */
+          if (app.pendingCellRead || app.pendingCellWrite || app.cellInfoWriteBatch) {
+            restartAbnormal("等待电芯操作完成后读取异常历史", 1000);
+            return;
+          }
+          if (app.abnormal.pending) {
+            if (Date.now() >= app.abnormal.pending.deadline)
+              restartAbnormal("异常查询超时，请检查设备固件及连接，稍后重试");
+            return;
+          }
+          if (Date.now() < app.abnormal.nextAt)
+            return;
+          /* 摘要和结束核验使用同一命令，分页始终单发单等。 */
+          const cmd = app.abnormal.phase === "page" ? CMD_GET_ABNORMAL_PAGE : CMD_GET_ABNORMAL_INFO;
+          /* 本次请求页号，摘要请求使用零作为内部占位。 */
+          const page = cmd === CMD_GET_ABNORMAL_PAGE ? app.abnormal.nextPage : 0;
+          /* 请求身份及等待截止时间，超时时间单位为毫秒。 */
+          const request = {
+            /* 本次请求命令。 */
+            cmd,
+            /* 本次请求页号。 */
+            page,
+            /* 串口连接代次。 */
+            generation: app.serialGeneration,
+            /* 正常轮询代次。 */
+            token,
+            /* 响应等待截止时间，单位为毫秒。 */
+            deadline: Date.now() + 3000,
+          };
+          app.abnormal.pending = request;
+          if (app.abnormal.phase === "summary")
+            app.abnormal.message = "正在读取异常历史摘要";
+          renderAbnormal();
+          /* 摘要载荷为空，分页载荷严格为一个页号字节。 */
+          const sent = await sendData(cmd, cmd === CMD_GET_ABNORMAL_PAGE ? new Uint8Array([page]) : new Uint8Array(), token);
+          if (app.abnormal.pending !== request || request.generation !== app.serialGeneration || token !== app.dataToken)
+            return;
+          if (!sent) restartAbnormal("异常查询未发送，稍后从摘要重读");
+          else
+            request.deadline = Date.now() + 3000;
         }
         function feedData(bytes) {
           if (!bytes || !bytes.length) return;
           bufAdd(app.bufData, bytes);
           extract(app.bufData).forEach(([c, p]) => {
             onDataFrame(c, p);
+            onAbnormalFrame(c, p);
             onTestFrame(c, p);
             showCommandResponse(c, p);
           });
@@ -5349,6 +5698,7 @@
             (s >> 24) & 255,
           ]);
         }
+        /* 发送透传数据，payload为内容，tip控制提示，msg为提示文本，th控制发送节流。 */
         async function sendRaw(payload, tip, msg, th = false) {
           if (!app.isConnected || !app.writer) {
             if (tip) toast("未连接设备，无法发送");
@@ -5362,6 +5712,8 @@
             if (tip) toast("发送内容为空");
             return false;
           }
+          /* 固定发送开始时的日志代次，清空后丢弃这次发送的旧记录。 */
+          const logGeneration = app.logGeneration;
           const writeGeneration = app.serialGeneration,
             writeWriter = app.writer;
           try {
@@ -5381,7 +5733,7 @@
                 return false;
               off = end;
             }
-            addLog("发送", payload);
+            addLog("发送", payload, logGeneration);
             if (tip) toast(msg || `已发送${payload.length}字节`);
             return true;
           } catch (_) {
@@ -5399,35 +5751,33 @@
           const p = pkt(cmd, data);
           return sendRaw(p, true, `${name} 已发送(${p.length}字节)`, true);
         }
-        async function sendData(cmd, data = new Uint8Array()) {
-          if (!app.isConnected || !app.writer) return false;
-          if (isIapSerialBusy()) return false;
+        /* 发送普通查询，cmd为命令，data为载荷，pollToken用于取消排队中的异常轮询请求。 */
+        async function sendData(cmd, data = new Uint8Array(), pollToken = null) {
+          if (!app.isConnected || !app.writer)
+            return false;
+          if (isIapSerialBusy())
+            return false;
+          /* 按既有协议生成完整请求帧。 */
           const p = pkt(cmd, data);
-          const writeGeneration = app.serialGeneration,
-            writeWriter = app.writer;
+          /* 固定发送时的串口代次。 */
+          const writeGeneration = app.serialGeneration;
+          /* 固定发送时的串口写对象。 */
+          const writeWriter = app.writer;
           try {
+            /* 本次请求已完成发送的字节数。 */
             let off = 0;
             while (off < p.length) {
+              /* 沿用现有每段最多二百五十六字节的发送方式。 */
               const end = Math.min(off + 256, p.length);
-              await qwrite(
-                p.slice(off, end),
-                true,
-                writeGeneration,
-                writeWriter,
-              );
-              if (
-                writeGeneration !== app.serialGeneration ||
-                writeWriter !== app.writer
-              )
+              /* 被页面切换或电芯事务取消的异常请求返回失败。 */
+              const sent = await qwrite(p.slice(off, end), true, writeGeneration, writeWriter, null, pollToken);
+              if (sent === false || writeGeneration !== app.serialGeneration || writeWriter !== app.writer)
                 return false;
               off = end;
             }
             return true;
           } catch (_) {
-            if (
-              writeGeneration !== app.serialGeneration ||
-              writeWriter !== app.writer
-            )
+            if (writeGeneration !== app.serialGeneration || writeWriter !== app.writer)
               return false;
             await disconn("透传通道已断开，请重新连接");
             return false;
@@ -5453,9 +5803,20 @@
           app.pendingStatic = new Set(STATIC_TYPES);
           app.pendingProjectInfo = true;
           app.pendingCellInfo = true;
-          app.pendingCellWrite = null;
+          /* 重置时释放整批事务，并清除上一设备的编辑值和勾选状态。 */
+          cancelCellInfoTransactions("未读取电芯信息");
+          el.cellInfoModelInput.value = "";
+          el.cellInfoModelInput.dataset.cellInfoEdited = "";
+          el.cellInfoModelSelected.checked = false;
+          /* 四个编码输入均恢复为空，数据显示由默认槽位提供。 */
+          for (let index = 0; index < CELL_INFO_NUM; index++) {
+            el.cellInfoCodeInputs[index].value = "";
+            el.cellInfoCodeInputs[index].dataset.cellInfoEdited = "";
+            el.cellInfoCodeSelected[index].checked = false;
+          }
           app.cellInfoSetTip = "未读取电芯信息";
           app.portsInfo = defPorts();
+          app.abnormal = defAbnormal();
           app.bufData = [];
           app.bufIap = [];
           app.portFrameExpect = 0;
@@ -5522,7 +5883,11 @@
           app.reader = null;
           app.activePort = null;
           app.isConnected = false;
+          /* 切换设备或连接失败时清除上一设备的异常历史。 */
+          app.abnormal = defAbnormal();
           app.readActive = false;
+          /* 切换串口或重新打开失败时，也要释放整批电芯操作。 */
+          if (app.pendingCellRead || app.pendingCellWrite || app.cellInfoWriteBatch) cancelCellInfoTransactions("串口连接已变更，请重新读取电芯信息");
           stopIapAckPoll();
           stopIapOptionPoll();
           clearIapWaiters();
@@ -5665,9 +6030,11 @@
           updConnUI();
           return ok;
         }
+        /* 停止普通数据轮询，同时撤销未完成的异常查询。 */
         function stopPoll() {
           app.dataToken++;
           app.portToken++;
+          restartAbnormal("异常历史查询已暂停", 1000);
         }
         function startPoll() {
           stopPoll();
@@ -5700,7 +6067,11 @@
                 });
                 await sendPollFrame(CMD_ACK);
                 if (app.pendingProjectInfo) await sendPollFrame(CMD_INFO);
-                if (app.pendingCellInfo) await sendPollFrame(CMD_GET_CELL_INFO);
+                /* 自动补拉也使用统一读取入口，避免与设置回读交叉。 */
+                if (app.pendingCellInfo && !app.pendingCellRead && !app.pendingCellWrite && !app.cellInfoWriteBatch && token === app.dataToken && !app.dev && !app.iap) {
+                  await sendGetCellInfo(false);
+                  await sleep(POLL_COMMAND_GAP_MS);
+                }
                 await sendPollFrame(CMD_RTC, new Uint8Array([0x01]));
                 for (let i = 0; i < types.length; i++) {
                   if (!(await sendPollFrame(CMD_DATA, new Uint8Array([types[i] & 255]))))
@@ -5718,6 +6089,8 @@
                 nextPortAt = cycleStart + PORT_POLL_INTERVAL_MS;
                 continue;
               }
+              /* 首轮数据及端口轮询完成后，按单发单等方式查询异常历史。 */
+              await pollAbnormal(token);
               await sleep(Math.max(1, Math.min(nextDataAt, nextPortAt) - now));
             }
           })();
@@ -5861,6 +6234,20 @@
           if (app.isConnected)
             await disconn("连接参数已更新，请重新连接");
         }
+        /* 清空透传记录、收发计数和接收分帧缓存，notify控制是否显示清空提示。 */
+        function clearDevData(notify = false) {
+          /* 旧发送完成后也不能重新写入本次已清空的透传记录。 */
+          app.logGeneration += 1;
+          resetRxFrame(true);
+          app.logs = [];
+          app.tx = 0;
+          app.rx = 0;
+          renderCounter();
+          renderLogs();
+          if (notify)
+            toast("已清空透传数据");
+        }
+        /* 切换开发者页面，on为真时结束数据轮询并清空此前的透传数据。 */
         function devMode(on) {
           if (!on) {
             stopIapAckPoll();
@@ -5873,6 +6260,13 @@
           renderDev();
           if (on) {
             stopPoll();
+            /* 进入开发者页面后停止尚未结束的自动电芯读取。 */
+            if (app.pendingCellRead && app.pendingCellRead.auto) {
+              app.pendingCellInfo = true;
+              cancelCellInfoTransactions("自动读取已结束，请点击读取电芯信息");
+            }
+            /* 从数据页面进入时丢弃旧接收缓存，透传区从本次进入开始记录。 */
+            clearDevData();
             openCmd();
             toast("已进入开发者模式");
           } else {
@@ -6031,30 +6425,196 @@
           const p = pkt(CMD_SET_TEST, pl);
           await sendTestPkt(p, tip, `发送测试数据 已发送(${p.length}字节)`);
         }
+        /* 将设置结果码转换为说明，result为设备返回的结果码。 */
+        function cellInfoResultText(result) {
+          /* 协议定义的设置结果说明。 */
+          const names = ["保存成功", "编号或字段错误", "文本长度错误", "字符错误", "Flash保存失败"];
+          return names[result] || "未知结果";
+        }
+        /* 结束当前单项事务，message为提示，notify控制弹窗，result说明成功及是否停止后续设置。 */
+        function finishCellInfoTransaction(message, notify = false, result = { ok: false, stop: true }) {
+          /* 保留当前设置的完成回调，供批量提交继续处理下一项。 */
+          const write = app.pendingCellWrite;
+          if (app.pendingCellRead) clearTimeout(app.pendingCellRead.timer);
+          if (write) clearTimeout(write.timer);
+          app.pendingCellRead = null;
+          app.pendingCellWrite = null;
+          app.cellInfoSetTip = message;
+          renderDeviceInfo();
+          if (notify) toast(message);
+          if (write && write.resolve) write.resolve({ ...result, message });
+        }
+        /* 取消整批电芯操作，message为取消原因，并释放等待中的设置回调。 */
+        function cancelCellInfoTransactions(message) {
+          app.cellInfoWriteBatch = null;
+          finishCellInfoTransaction(message);
+        }
+        /* 结束四编号读取，read为本次收集回复的批次，无回复的编码保持默认值。 */
+        function finishCellInfoRead(read) {
+          if (app.pendingCellRead !== read) return;
+          app.pendingCellInfo = false;
+          finishCellInfoTransaction("读取完成，收到" + (CELL_INFO_NUM - read.pending.size) + "条编码回复");
+        }
+        /* 启动应答计时，request为当前事务，message为设置确认或回读超时说明。 */
+        function armCellInfoTimeout(request, message) {
+          clearTimeout(request.timer);
+          request.timer = setTimeout(() => {
+            if (request.generation !== app.serialGeneration) return;
+            if (app.pendingCellRead !== request && app.pendingCellWrite !== request) return;
+            if (app.pendingCellRead === request && !request.write) {
+              finishCellInfoRead(request);
+              return;
+            }
+            finishCellInfoTransaction(message, false, { ok: false, stop: true });
+          }, CELL_INFO_TIMEOUT_MS);
+        }
+        /* 读取一至四号编码，tip区分手动读取，write用于设置后的单编号回读。 */
+        async function sendGetCellInfo(tip = true, write = null) {
+          if (app.pendingCellRead || app.pendingCellWrite !== write || (!write && app.cellInfoWriteBatch)) {
+            if (tip) toast("电芯操作尚未结束，请稍后重试");
+            return false;
+          }
+          if (!app.isConnected || !app.writer || isIapSerialBusy()) {
+            if (write) finishCellInfoTransaction("设置已确认，但回读请求未发送，请重新读取设备当前值");
+            else if (tip) toast("设备未连接或IAP正在占用串口，无法读取电芯信息");
+            return false;
+          }
+          /* 普通读取固定请求四个编号，设置回读只请求刚写入的编号。 */
+          const indices = write ? [write.index] : Array.from({ length: CELL_INFO_NUM }, (_, index) => index + 1);
+          /* 跟踪已发编号、待回复编号、页面代次及关联设置。 */
+          const read = { generation: app.serialGeneration, token: app.dataToken, auto: !tip && !write, write, pending: new Set(indices), sent: new Set(), sending: true, timer: null };
+          app.pendingCellRead = read;
+          if (!write) {
+            app.cellInfo = defCellInfo();
+            app.pendingCellInfo = true;
+            if (!el.cellInfoModelSelected.checked && el.cellInfoModelInput.dataset.cellInfoEdited !== "1") el.cellInfoModelInput.value = "";
+            /* 清除上轮未编辑的输入，缺失编号由空输入和默认显示表示。 */
+            for (let index = 0; index < CELL_INFO_NUM; index++) {
+              if (!el.cellInfoCodeSelected[index].checked && el.cellInfoCodeInputs[index].dataset.cellInfoEdited !== "1") el.cellInfoCodeInputs[index].value = "";
+            }
+          }
+          app.cellInfoSetTip = write ? "设置完成，正在回读" + write.label : "正在读取编号1～4...";
+          renderDeviceInfo();
+          /* 按编号依次发送，复用现有帧间间隔以保护设备接收缓冲。 */
+          for (const index of indices) {
+            if (app.pendingCellRead !== read || read.generation !== app.serialGeneration) return false;
+            if (isIapSerialBusy() || (read.auto && (app.dev || read.token !== app.dataToken))) {
+              app.pendingCellInfo = true;
+              cancelCellInfoTransactions("读取已结束，请重新读取电芯信息");
+              return false;
+            }
+            read.sent.add(index);
+            /* GET请求固定携带一个编号字节。 */
+            const payload = new Uint8Array([index]);
+            /* 手动读取保留发送日志，自动读取和设置回读沿用数据发送入口。 */
+            const sent = tip ? await sendRaw(pkt(CMD_GET_CELL_INFO, payload), false, null, true) : await sendData(CMD_GET_CELL_INFO, payload);
+            if (app.pendingCellRead !== read || read.generation !== app.serialGeneration) return sent;
+            if (!sent) {
+              finishCellInfoTransaction("编号" + index + "读取请求发送失败", !write);
+              return false;
+            }
+            if (index !== indices[indices.length - 1]) await sleep(POLL_COMMAND_GAP_MS);
+          }
+          if (app.pendingCellRead !== read || read.generation !== app.serialGeneration) return true;
+          read.sending = false;
+          if (!write && read.pending.size === 0) finishCellInfoRead(read);
+          else armCellInfoTimeout(read, "设置已确认，但回读超时，请重新读取设备当前值");
+          if (tip) toast("已依次发送编号1～4的读取请求");
+          return true;
+        }
+        /* 规范设置文本，value为输入内容，返回去除首尾空白后的大写文本。 */
         function normalizeCellInfoText(value) {
           return String(value || "").trim().toUpperCase();
         }
-        async function sendSetCellInfo(field) {
-          const input = field === 0 ? el.cellInfoModelInput : el.cellInfoCodeInput,
-            label = field === 0 ? "电芯型号" : "电芯编码",
-            value = normalizeCellInfoText(input.value);
-          input.value = value;
-          if (!/^[A-Z0-9-]{1,24}$/.test(value)) {
-            toast(`${label}格式错误：仅允许A-Z、0-9、-，长度1-24字符`);
+        /* 提交一项设置，item为点击时捕获的字段，batch为所属设置批次。 */
+        async function sendCellInfoItem(item, batch) {
+          /* 单项设置保留固定编号、字段、期望文本及连接代次。 */
+          const write = { ...item, generation: batch.generation, phase: "ack", timer: null, resolve: null };
+          /* 等待匹配的设置应答及回读完成后，才允许批次发送下一项。 */
+          const completed = new Promise((resolve) => {
+            write.resolve = resolve;
+          });
+          app.pendingCellWrite = write;
+          app.cellInfoSetTip = "正在设置" + write.label + "...";
+          renderDeviceInfo();
+          /* 允许字符均为单字节ASCII。 */
+          const text = new TextEncoder().encode(write.expected);
+          /* SET载荷固定为编号、字段和文本。 */
+          const payload = new Uint8Array(2 + text.length);
+          payload[0] = write.index;
+          payload[1] = write.field;
+          payload.set(text, 2);
+          /* 每项保留发送日志，最终统一显示整批执行结果。 */
+          const sent = await sendRaw(pkt(CMD_SET_CELL_INFO, payload), false, null, true);
+          if (app.pendingCellWrite === write && write.generation === app.serialGeneration) {
+            if (!sent) finishCellInfoTransaction(write.label + "设置请求发送失败");
+            else if (write.phase === "ack") armCellInfoTimeout(write, write.label + "设置确认超时，结果待回读确认");
+          }
+          return completed;
+        }
+        /* 验证并快照全部勾选字段，再依次设置公共型号及各编号编码。 */
+        async function sendSetCellInfo() {
+          if (app.pendingCellRead || app.pendingCellWrite || app.cellInfoWriteBatch) {
+            toast("电芯操作尚未结束，请稍后重试");
             return;
           }
-          const text = new TextEncoder().encode(value),
-            payload = new Uint8Array(1 + text.length);
-          payload[0] = field & 255;
-          payload.set(text, 1);
-          app.pendingCellWrite = { field, label, expected: value };
-          app.cellInfoSetTip = `${label}设置请求已发送，等待设备确认...`;
+          if (!app.isConnected || !app.writer || isIapSerialBusy()) {
+            toast("设备未连接或IAP正在占用串口，无法设置电芯信息");
+            return;
+          }
+          /* 公共型号只提交一次，协议要求携带有效编号，因此固定使用编号一。 */
+          const fields = [{ index: 1, field: 0, label: "电芯型号", input: el.cellInfoModelInput, selected: el.cellInfoModelSelected }];
+          /* 每个编码对应自己的输入和勾选状态。 */
+          for (let index = 0; index < CELL_INFO_NUM; index++) {
+            fields.push({ index: index + 1, field: 1, label: "电芯编码" + (index + 1), input: el.cellInfoCodeInputs[index], selected: el.cellInfoCodeSelected[index] });
+          }
+          /* 在发送首项之前完成全部勾选值的校验和快照。 */
+          const items = [];
+          /* 未勾选字段无需参与格式校验。 */
+          for (const field of fields) {
+            if (!field.selected.checked) continue;
+            /* 捕获本次要发送的规范化文本。 */
+            const value = normalizeCellInfoText(field.input.value);
+            if (!/^[A-Z0-9-]{1,24}$/.test(value)) {
+              toast(field.label + "格式错误：仅允许A-Z、0-9、-，长度1-24字符");
+              return;
+            }
+            field.input.value = value;
+            items.push({ index: field.index, field: field.field, label: field.label, expected: value });
+          }
+          if (!items.length) {
+            toast("请勾选需要设置的电芯信息");
+            return;
+          }
+          /* 批次覆盖单项应答之间的间隙，防止其他电芯命令插入。 */
+          const batch = { generation: app.serialGeneration, items, results: [] };
+          app.cellInfoWriteBatch = batch;
           renderDeviceInfo();
-          const sent = await sendCmd("USB_CMD_SET_CELL_INFO", CMD_SET_CELL_INFO, payload);
-          if (!sent) {
-            app.pendingCellWrite = null;
-            app.cellInfoSetTip = `${label}设置请求发送失败`;
-            renderDeviceInfo();
+          try {
+            /* 公共型号在前，各编码随后按编号递增处理。 */
+            for (const item of batch.items) {
+              if (app.cellInfoWriteBatch !== batch || batch.generation !== app.serialGeneration || isIapSerialBusy()) break;
+              /* 当前项完成设置及回读后的执行结果。 */
+              const result = await sendCellInfoItem(item, batch);
+              if (app.cellInfoWriteBatch !== batch || batch.generation !== app.serialGeneration) return;
+              batch.results.push(result);
+              if (result.stop) break;
+              await sleep(POLL_COMMAND_GAP_MS);
+            }
+          } finally {
+            if (app.cellInfoWriteBatch === batch) {
+              app.cellInfoWriteBatch = null;
+              /* 保存成功且回读一致的项目数量。 */
+              const successCount = batch.results.filter((result) => result.ok).length;
+              /* 设备拒绝、回读不一致或通讯失败的逐项说明。 */
+              const failures = batch.results.filter((result) => !result.ok);
+              /* 因通讯中断而尚未执行的勾选项目数量。 */
+              const remaining = batch.items.length - batch.results.length;
+              app.cellInfoSetTip = "设置结束，成功" + successCount + "项，失败" + failures.length + "项，待处理" + remaining + "项";
+              if (failures.length) app.cellInfoSetTip += "。" + failures.map((result) => result.message).join("。");
+              renderDeviceInfo();
+              toast(app.cellInfoSetTip);
+            }
           }
         }
         async function syncRtc() {
@@ -6156,15 +6716,7 @@
             }
           };
           el.saveDevLogBtn.onclick = () => exportDevLogs();
-          el.clearDevBtn.onclick = () => {
-            resetRxFrame(true);
-            app.logs = [];
-            app.tx = 0;
-            app.rx = 0;
-            renderCounter();
-            renderLogs();
-            toast("已清空透传数据");
-          };
+          el.clearDevBtn.onclick = () => clearDevData(true);
           el.sendDevBtn.onclick = () => sendNow(true);
           el.cancelSerialConfigBtn.onclick = closeCfg;
           el.useCustomBaud.onchange = () => {
@@ -6217,16 +6769,13 @@
             app.testVal = String(v);
             sendSetTest(s.id, v, true);
           };
-          el.sendGetCellInfoBtn.onclick = () =>
-            sendCmd("USB_CMD_GET_CELL_INFO", CMD_GET_CELL_INFO);
-          el.sendSetCellModelBtn.onclick = () => sendSetCellInfo(0);
-          el.sendSetCellCodeBtn.onclick = () => sendSetCellInfo(1);
-          [el.cellInfoModelInput, el.cellInfoCodeInput].forEach((input) => {
+          el.sendGetCellInfoBtn.onclick = () => sendGetCellInfo();
+          el.sendSetCellInfoBtn.onclick = () => sendSetCellInfo();
+          /* 编辑标记用于保留尚未发送的型号及编码，设备回复只同步未编辑字段。 */
+          [el.cellInfoModelInput, ...el.cellInfoCodeInputs].forEach((input) => {
             input.oninput = () => {
-              input.value = input.value
-                .toUpperCase()
-                .replace(/[^A-Z0-9-]+/g, "")
-                .slice(0, 24);
+              input.value = input.value.toUpperCase().replace(/[^A-Z0-9-]+/g, "").slice(0, 24);
+              input.dataset.cellInfoEdited = "1";
             };
           });
           el.setTestValueInput.oninput = () => {
@@ -6279,12 +6828,6 @@
           };
           el.adminModal.onclick = (e) => {
             if (e.target === el.adminModal) closeAdmin();
-          };
-          el.closeCommandResponseBtn.onclick = () =>
-            el.commandResponseModal.classList.remove("show");
-          el.commandResponseModal.onclick = (e) => {
-            if (e.target === el.commandResponseModal)
-              el.commandResponseModal.classList.remove("show");
           };
           if (app.supported) {
             navigator.serial.addEventListener("connect", async () => {
