@@ -4,8 +4,55 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Power Bank 数据监测</title>
+    <script>
+      /* 在样式加载前恢复主题，并将切换控制绑定到页面顶部。 */
+      (() => {
+        /* 保存页面主题偏好的本地存储键。 */
+        const themeStorageKey = "power-bank-theme";
+        /* 系统深色外观的实时状态。 */
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+        /* 默认跟随系统，保存的手动选项优先。 */
+        let themeMode = "system";
+        try {
+          /* 当前浏览器保存的主题偏好。 */
+          const savedTheme = localStorage.getItem(themeStorageKey);
+          if (savedTheme === "light" || savedTheme === "dark") {
+            themeMode = savedTheme;
+          }
+        } catch {
+          /* 无法读取本地存储时使用默认选项。 */
+        }
+
+        /* 根据用户选择和系统外观更新页面使用的配色。 */
+        function applyTheme() {
+          /* 当前页面是否应显示深色配色。 */
+          const useDarkTheme = themeMode === "dark" || (themeMode === "system" && systemTheme.matches);
+          document.documentElement.dataset.theme = useDarkTheme ? "dark" : "light";
+        }
+
+        applyTheme();
+        systemTheme.addEventListener("change", applyTheme);
+
+        /* 页面解析完成后，让选择框反映已恢复的偏好。 */
+        document.addEventListener("DOMContentLoaded", () => {
+          /* 顶部主题选择框。 */
+          const themeSelect = document.getElementById("themeSelect");
+          themeSelect.value = themeMode;
+          /* 用户手动切换时立即更新页面，再保存偏好。 */
+          themeSelect.addEventListener("change", () => {
+            themeMode = themeSelect.value;
+            applyTheme();
+            try {
+              localStorage.setItem(themeStorageKey, themeMode);
+            } catch {
+              /* 无法写入本地存储时保留本页已生效的主题。 */
+            }
+          });
+        });
+      })();
+    </script>
     <style>
-      /* 使用系统浅色主题作为默认外观，业务脚本继续复用原有颜色变量。 */
+      /* 浅色配色供手动选择或系统浅色模式使用。 */
       :root {
         color-scheme: light;
         /* 页面基础背景颜色。 */
@@ -57,59 +104,57 @@
         /* 浮动提示背景颜色。 */
         --toast-bg: rgba(244, 248, 255, 0.96);
       }
-      /* 系统切换为深色时同步更新全部表面和文字颜色。 */
-      @media (prefers-color-scheme: dark) {
-        :root {
-          color-scheme: dark;
-          /* 深色页面基础背景颜色。 */
-          --bg1: #171c27;
-          /* 深色页面次级背景颜色。 */
-          --bg2: #202735;
-          /* 深色页面末端背景颜色。 */
-          --bg3: #232435;
-          /* 深色玻璃顶部透光颜色。 */
-          --glass-top: rgba(141, 166, 214, 0.13);
-          /* 深色玻璃底部透光颜色。 */
-          --glass-bottom: rgba(16, 24, 43, 0.20);
-          /* 深色主卡片背景颜色。 */
-          --card: rgba(36, 44, 61, 0.88);
-          /* 深色次级内容背景颜色。 */
-          --sub: rgba(166, 188, 224, 0.06);
-          /* 深色分隔线颜色。 */
-          --line: rgba(192, 211, 244, 0.13);
-          /* 深色强调边框颜色。 */
-          --line2: rgba(110, 193, 255, 0.66);
-          /* 深色主文字颜色。 */
-          --text: #f0f4fc;
-          /* 深色次要文字颜色。 */
-          --muted: #a9b6cd;
-          /* 深色业务强调颜色。 */
-          --neon: #9dcaff;
-          /* 深色正常状态颜色。 */
-          --ok: #8ce0ac;
-          /* 深色异常状态颜色。 */
-          --danger: #ff9caf;
-          /* 深色玻璃外缘高光颜色。 */
-          --edge: rgba(183, 213, 255, 0.55);
-          /* 深色玻璃内缘反射颜色。 */
-          --rim: rgba(236, 247, 255, 0.82);
-          /* 深色玻璃背面的柔和投影。 */
-          --shadow: 0 10px 26px rgba(0, 0, 0, 0.18), 0 2px 5px rgba(0, 0, 0, 0.12);
-          /* 深色输入框背景颜色。 */
-          --input: rgba(163, 184, 217, 0.09);
-          /* 深色日志阅读区域背景颜色。 */
-          --log-bg: rgba(21, 28, 42, 0.24);
-          /* 深色进度条中心颜色。 */
-          --ring-center: #253147;
-          /* 深色进度条轨道颜色。 */
-          --track: rgba(173, 196, 230, 0.18);
-          /* 深色正常状态底纹。 */
-          --ok-bg: rgba(67, 197, 121, 0.16);
-          /* 深色弹窗遮罩颜色。 */
-          --overlay: rgba(8, 12, 22, 0.56);
-          /* 深色浮动提示背景颜色。 */
-          --toast-bg: rgba(38, 49, 69, 0.97);
-        }
+      /* 深色配色供手动选择或系统深色模式使用。 */
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        /* 深色页面基础背景颜色。 */
+        --bg1: #171c27;
+        /* 深色页面次级背景颜色。 */
+        --bg2: #202735;
+        /* 深色页面末端背景颜色。 */
+        --bg3: #232435;
+        /* 深色玻璃顶部透光颜色。 */
+        --glass-top: rgba(141, 166, 214, 0.13);
+        /* 深色玻璃底部透光颜色。 */
+        --glass-bottom: rgba(16, 24, 43, 0.20);
+        /* 深色主卡片背景颜色。 */
+        --card: rgba(36, 44, 61, 0.88);
+        /* 深色次级内容背景颜色。 */
+        --sub: rgba(166, 188, 224, 0.06);
+        /* 深色分隔线颜色。 */
+        --line: rgba(192, 211, 244, 0.13);
+        /* 深色强调边框颜色。 */
+        --line2: rgba(110, 193, 255, 0.66);
+        /* 深色主文字颜色。 */
+        --text: #f0f4fc;
+        /* 深色次要文字颜色。 */
+        --muted: #a9b6cd;
+        /* 深色业务强调颜色。 */
+        --neon: #9dcaff;
+        /* 深色正常状态颜色。 */
+        --ok: #8ce0ac;
+        /* 深色异常状态颜色。 */
+        --danger: #ff9caf;
+        /* 深色玻璃外缘高光颜色。 */
+        --edge: rgba(183, 213, 255, 0.55);
+        /* 深色玻璃内缘反射颜色。 */
+        --rim: rgba(236, 247, 255, 0.82);
+        /* 深色玻璃背面的柔和投影。 */
+        --shadow: 0 10px 26px rgba(0, 0, 0, 0.18), 0 2px 5px rgba(0, 0, 0, 0.12);
+        /* 深色输入框背景颜色。 */
+        --input: rgba(163, 184, 217, 0.09);
+        /* 深色日志阅读区域背景颜色。 */
+        --log-bg: rgba(21, 28, 42, 0.24);
+        /* 深色进度条中心颜色。 */
+        --ring-center: #253147;
+        /* 深色进度条轨道颜色。 */
+        --track: rgba(173, 196, 230, 0.18);
+        /* 深色正常状态底纹。 */
+        --ok-bg: rgba(67, 197, 121, 0.16);
+        /* 深色弹窗遮罩颜色。 */
+        --overlay: rgba(8, 12, 22, 0.56);
+        /* 深色浮动提示背景颜色。 */
+        --toast-bg: rgba(38, 49, 69, 0.97);
       }
       * {
         box-sizing: border-box;
@@ -240,13 +285,9 @@
         margin-left: auto;
       }
       .appearance {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        color: var(--muted);
-        font-size: 12px;
-        white-space: nowrap;
+        cursor: pointer;
       }
+      .appearance,
       .nav-btn,
       .state-btn,
       .main-btn,
@@ -393,7 +434,19 @@
       .time-bar {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 8px 14px;
+        min-width: 0;
+      }
+      /* 两组时钟整体换行，各自的日期和时分秒保持在一起。 */
+      .time-readings {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 4px 18px;
+        min-width: 0;
+      }
+      .time-bar > button {
+        flex: 0 0 auto;
       }
       .time-value {
         display: flex;
@@ -402,6 +455,7 @@
         gap: 7px;
         font-size: 12px;
         font-variant-numeric: tabular-nums;
+        white-space: nowrap;
       }
       .time-value .t1,
       .time-value .t2 {
@@ -470,103 +524,163 @@
       .card {
         padding: 18px;
       }
+      /* 宽屏并列呈现剩余电量、健康度和当前电池状态。 */
       .overview-card {
         grid-column: span 6;
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.7fr);
         align-items: center;
+        gap: clamp(12px, 1.4vw, 24px);
         min-height: 194px;
         align-self: stretch;
       }
-      .rings {
-        width: 100%;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        align-items: center;
-        gap: 24px;
-      }
-      .rw {
-        display: flex;
-        justify-content: center;
-      }
-      .ring {
+      .soc-ring {
+        /* 电量圆环边框厚度，单位为像素。 */
+        --ring-inset: 7px;
         position: relative;
-        width: 150px;
-        height: 150px;
-        border-radius: 50%;
+        width: min(100%, var(--soc-ring-size, 150px));
+        aspect-ratio: 1;
+        container-type: inline-size;
+        justify-self: center;
         display: grid;
         place-items: center;
+        border-radius: 50%;
         background: conic-gradient(var(--c) calc(var(--v) * 1%), var(--track) 0);
       }
-      .ring::before {
+      .soc-ring::before {
         content: "";
         position: absolute;
-        inset: 7px;
+        inset: var(--ring-inset);
         border-radius: 50%;
         background: var(--ring-center);
         box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.12);
       }
-      .rc {
+      .soc-content {
         position: relative;
-        display: flex;
-        align-items: center;
-        flex-direction: column;
-        gap: 6px;
-        z-index: 1;
+        display: grid;
+        justify-items: center;
+        gap: 3px;
       }
-      .rv {
+      .overview-value {
         color: var(--text);
-        font-size: 38px;
-        line-height: 1.15;
+        font-size: clamp(24px, 2.2vw, 36px);
+        line-height: 1;
         font-weight: 750;
         font-variant-numeric: tabular-nums;
         letter-spacing: -1px;
+        white-space: nowrap;
       }
-      .rl,
-      .rs {
+      /* 百分比字号按圆环内径缩放，满电数值也完整显示。 */
+      #socValue {
+        font-size: 30px;
+        font-size: clamp(16px, calc((100cqi - 2 * var(--ring-inset)) * 0.235), 38px);
+      }
+      .overview-label {
         color: var(--muted);
-        font-size: 12px;
+        font-size: 13px;
+        line-height: 1.3;
       }
-      .health-block {
-        padding-left: 28px;
+      .soc-content .overview-label {
+        font-size: 12px;
+        font-size: clamp(10px, 10cqi, 14px);
+      }
+      .battery-health {
+        width: 100%;
+        max-width: 190px;
+        min-width: 0;
+      }
+      .battery-health .overview-value {
+        margin-top: 5px;
+      }
+      .health-track {
+        height: 6px;
+        margin-top: 10px;
+        border-radius: 999px;
+        background: var(--track);
+      }
+      .health-track::before {
+        content: "";
+        display: block;
+        width: calc(var(--v) * 1%);
+        height: 100%;
+        border-radius: inherit;
+        background: var(--c);
+      }
+      .battery-status {
+        min-width: 0;
+        padding-left: clamp(12px, 1.4vw, 24px);
         border-left: 1px solid var(--line);
       }
-      #sohRing {
-        width: auto;
-        height: auto;
-        border-radius: 0;
-        background: transparent;
-      }
-      #sohRing::before {
-        display: none;
-      }
-      #sohRing .rc {
-        align-items: flex-start;
-      }
-      #sohValue {
-        font-size: 30px;
-      }
-      .st {
-        margin-top: 18px;
-      }
-      .si {
-        display: none;
+      .status-heading {
+        display: flex;
         align-items: center;
-        gap: 6px;
-        width: fit-content;
-        padding: 4px 12px;
-        border-radius: 16px;
-        background: var(--ok-bg);
-        color: var(--ok);
-        font-size: 12px;
+        justify-content: space-between;
+        gap: 8px;
       }
-      .si.on {
+      .status-heading h2 {
+        font-size: 14px;
+      }
+      .overview-status {
         display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        color: var(--muted);
+        background: var(--sub);
+        font-size: 12px;
+        font-weight: 650;
+        white-space: nowrap;
       }
-      .bar {
+      .overview-status::before {
+        content: "";
         width: 5px;
         height: 5px;
         border-radius: 50%;
         background: currentColor;
+      }
+      .overview-status[data-state="1"] {
+        color: var(--ok);
+        background: var(--ok-bg);
+      }
+      .overview-status[data-state="2"] {
+        color: var(--neon);
+      }
+      /* 充满与放空预估共用同一组，保留各自的分钟单位。 */
+      .overview-estimates {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin: 8px 0 0;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--sub);
+      }
+      .overview-estimates > div + div {
+        padding-left: 8px;
+        border-left: 1px solid var(--line);
+      }
+      .overview-estimates dt {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      .overview-estimates dd {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        column-gap: 4px;
+        margin: 3px 0 0;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.25;
+        font-variant-numeric: tabular-nums;
+      }
+      .overview-estimates .u {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 400;
       }
       .metrics-grid {
         grid-column: span 6;
@@ -626,57 +740,103 @@
       .abnormal-card {
         grid-column: 1 / -1;
       }
-      .cell-grid {
+      /* 两张信息卡共用四列字段，标签与数值始终靠在同一列。 */
+      .info-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 14px;
-        margin: 18px 0;
+        gap: 10px 14px;
+        margin: 0;
       }
-      .cell-reading {
-        display: flex;
-        align-items: center;
-        gap: 10px;
+      .info-grid > div {
         min-width: 0;
       }
-      .cell-icon {
-        width: 22px;
-        height: 34px;
-        color: var(--ok);
-      }
-      .cell-label {
+      .info-grid dt {
         color: var(--muted);
         font-size: 12px;
+        line-height: 1.35;
       }
-      .cell-number {
-        display: flex;
-        align-items: baseline;
-        gap: 4px;
+      .info-grid dd {
+        margin: 3px 0 0;
+        font-size: 14px;
         font-weight: 650;
+        line-height: 1.35;
         font-variant-numeric: tabular-nums;
+        overflow-wrap: anywhere;
       }
-      .cell-number .u {
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 400;
+      .battery-readings,
+      .device-card > .info-grid {
+        margin-top: 12px;
       }
-      .capacity-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-        padding: 12px 0;
-        border-top: 1px solid var(--line);
-        border-bottom: 1px solid var(--line);
-      }
-      .capacity-grid .cell-number {
-        margin-top: 5px;
-        font-size: 16px;
-      }
-      .battery-meta,
-      .device-meta {
+      .battery-readings {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px 24px;
+        gap: 12px;
+      }
+      .reading-group {
+        min-width: 0;
+        padding: 9px 12px 10px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--sub);
+      }
+      .reading-group h3 {
+        margin: 0 0 7px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      /* 串数与电芯电压放在同一标题行，窄屏可自然换行。 */
+      .reading-group-heading {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 4px 12px;
+        margin-bottom: 7px;
+      }
+      .reading-group-heading h3 {
+        margin: 0;
+      }
+      .reading-count {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .reading-count strong {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      .reading-values {
+        column-gap: 8px;
+      }
+      .info-grid.cell-voltage-values {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 64px), 1fr));
+      }
+      .info-grid.capacity-values {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .reading-values dd {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        column-gap: 4px;
+        font-size: 18px;
+      }
+      .reading-values .u {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 400;
+      }
+      .battery-card > .info-grid,
+      .device-card > .codes-grid {
         margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+      }
+      .codes-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 144px), 1fr));
+      }
+      .info-grid .info-code {
+        font-family: "IBM Plex Mono", Consolas, monospace;
+        font-size: 13px;
       }
       .kv {
         display: grid;
@@ -698,18 +858,6 @@
       .kv .u {
         color: var(--muted);
         font-size: 11px;
-      }
-      .codes-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px 14px;
-        padding-top: 12px;
-        margin-top: 12px;
-        border-top: 1px solid var(--line);
-      }
-      .codes-grid .v {
-        font-family: "IBM Plex Mono", Consolas, monospace;
-        font-size: 13px;
       }
       .ports {
         display: grid;
@@ -852,11 +1000,10 @@
         font-weight: 400;
         white-space: nowrap;
       }
+      /* 异常记录随列表内容展开，超出视口时由页面滚动。 */
       .abnormal-list {
         display: grid;
         gap: 8px;
-        max-height: 240px;
-        overflow: auto;
         margin-top: 12px;
       }
       .sub {
@@ -896,14 +1043,6 @@
         background: transparent;
         color: var(--muted);
         font-size: 12px;
-      }
-      .data-footer {
-        display: flex;
-        justify-content: flex-end;
-        gap: 7px;
-        margin-top: 2px;
-        color: var(--muted);
-        font-size: 11px;
       }
       .dev,
       .iap {
@@ -1210,37 +1349,6 @@
       .ob {
         border-radius: 12px;
       }
-      .command-picker,
-      .cell-info-disclosure {
-        min-width: 0;
-      }
-      .command-picker > summary,
-      .cell-info-disclosure > summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        padding: 9px 11px;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: var(--input);
-        font-size: 12px;
-        cursor: pointer;
-        list-style: none;
-      }
-      .command-picker > summary::after,
-      .cell-info-disclosure > summary::after {
-        content: "⌄";
-        color: var(--muted);
-      }
-      .command-picker[open] > summary,
-      .cell-info-disclosure[open] > summary {
-        margin-bottom: 12px;
-      }
-      .command-picker[open] > summary::after,
-      .cell-info-disclosure[open] > summary::after {
-        transform: rotate(180deg);
-      }
       .admin-test {
         padding: 14px;
         border: 1px solid var(--line);
@@ -1276,62 +1384,181 @@
         gap: 8px;
         font-size: 11px;
       }
+      .cell-info-edit-row[hidden] {
+        display: none;
+      }
       .cell-info-edit-row > label:first-child {
         color: var(--muted);
       }
       .note.ok {
         color: var(--ok);
       }
+      /* 下载流程与设备参数并排，传输日志通栏，窄屏按阅读顺序纵向排列。 */
       .iap-main {
         display: grid;
-        grid-template-columns: 1.1fr 1fr;
-        align-items: start;
-        gap: 18px;
+        grid-template-columns: minmax(0, 1.52fr) minmax(320px, 1fr);
+        grid-template-areas: "workflow device" "activity activity";
+        align-content: start;
+        gap: 16px;
+        padding: 2px 3px 12px;
       }
       .iap-panel {
         display: flex;
         flex-direction: column;
         gap: 16px;
-        padding: 22px;
+        min-width: 0;
+        padding: clamp(16px, 2vw, 24px);
       }
-      .iap-grid,
-      .iap-actions {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
+      .iap-workflow {
+        grid-area: workflow;
       }
-      .iap-actions {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+      .iap-device {
+        grid-area: device;
       }
-      .iap-field {
+      .iap-activity {
+        grid-area: activity;
+        gap: 12px;
+      }
+      .iap-panel-heading {
         display: flex;
-        flex-direction: column;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px 12px;
+      }
+      .iap-link-status {
+        display: inline-flex;
+        align-items: center;
         gap: 7px;
+        max-width: 100%;
+        min-height: 27px;
+      }
+      .iap-link-status::before {
+        content: "";
+        flex: 0 0 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .iap-file-picker {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px 16px;
+        min-width: 0;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--input);
+      }
+      .iap-file-summary,
+      .iap-field,
+      .iap-transfer-head > div {
         min-width: 0;
       }
-      .iap-file {
-        display: none;
+      .iap-file-name {
+        display: block;
+        margin-top: 3px;
+        font-size: 16px;
+        font-weight: 650;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
       }
-      .iap-kv {
+      .iap-file-dir {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .iap-file-picker > button {
+        flex: 0 0 auto;
+      }
+      .iap-label,
+      .iap-file-details dt,
+      .iap-transfer-meta dt,
+      .iap-device-info dt {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .iap-file-details,
+      .iap-transfer-meta {
         display: grid;
-        grid-template-columns: max-content minmax(0, 1fr);
-        align-items: baseline;
-        gap: 12px;
+        gap: 8px 12px;
+        margin: 0;
+      }
+      .iap-file-details {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(86px, 1fr);
+      }
+      .iap-file-details > div + div {
+        padding-left: 12px;
+        border-left: 1px solid var(--line);
+      }
+      .iap-file-details dd,
+      .iap-transfer-meta dd {
+        margin: 3px 0 0;
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+        overflow-wrap: anywhere;
+      }
+      .iap-mono {
+        font-family: "IBM Plex Mono", Consolas, monospace;
+        font-size: 0.93em;
+      }
+      .iap-controls {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(140px, auto);
+        align-items: end;
+        gap: 10px 14px;
+      }
+      .iap-field {
+        display: grid;
+        gap: 5px;
+      }
+      .iap-field > select,
+      .iap-controls > button,
+      .iap-file-picker > button {
+        min-height: 40px;
+        font-size: 14px;
+      }
+      .iap-download-hint {
+        margin: -8px 0 0;
         color: var(--muted);
         font-size: 12px;
       }
-      .iap-kv > span:last-child {
+      .iap-transfer {
+        display: grid;
+        gap: 10px;
         min-width: 0;
-        color: var(--text);
-        text-align: right;
+        padding: 13px 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--sub);
+      }
+      .iap-transfer-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .iap-transfer-state {
+        margin: 3px 0 0;
+        font-weight: 600;
+        line-height: 1.35;
         overflow-wrap: anywhere;
+      }
+      .iap-progress-value {
+        flex: 0 0 auto;
+        color: var(--neon);
+        font-size: clamp(25px, 3vw, 34px);
+        font-weight: 700;
         font-variant-numeric: tabular-nums;
+        line-height: 1;
       }
       .iap-progress {
-        height: 10px;
+        height: 8px;
         overflow: hidden;
-        border: 1px solid var(--line);
-        border-radius: 10px;
+        border-radius: 999px;
         background: var(--track);
       }
       .iap-progress > span {
@@ -1342,18 +1569,50 @@
         background: linear-gradient(90deg, #4197fa, #51deed);
         transition: width 160ms ease;
       }
+      .iap-transfer-meta {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .iap-device-info {
+        margin: 0;
+      }
+      .iap-device-info > div {
+        display: grid;
+        grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
+        align-items: baseline;
+        gap: 12px;
+        min-width: 0;
+        padding: 12px 0;
+      }
+      .iap-device-info > div + div {
+        border-top: 1px solid var(--line);
+      }
+      .iap-device-info dd {
+        min-width: 0;
+        margin: 0;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+        overflow-wrap: anywhere;
+      }
       .iap-log {
-        height: 320px;
+        min-height: 110px;
+        max-height: clamp(180px, 30dvh, 300px);
+        margin: 0;
+        padding: 12px 14px;
         overflow: auto;
-        padding: 14px;
         border: 1px solid var(--line);
         border-radius: 12px;
         background: var(--log-bg);
         color: var(--muted);
         font-family: "IBM Plex Mono", Consolas, monospace;
-        font-size: 11px;
+        font-size: 12px;
+        line-height: 1.65;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
+      }
+      .iap-log:focus-visible {
+        outline: 2px solid var(--neon);
+        outline-offset: 2px;
       }
       .m {
         position: fixed;
@@ -1453,26 +1712,17 @@
           padding-right: 10px;
           padding-left: 10px;
         }
-        .appearance {
-          font-size: 0;
-        }
         .top-actions {
           gap: 8px;
         }
         .dev-main {
           grid-template-columns: minmax(0, 1fr) 340px;
         }
-        .cell-grid {
-          gap: 10px;
+        .battery-readings {
+          grid-template-columns: 1fr;
         }
-        .cell-reading {
-          gap: 7px;
-        }
-        .cell-icon {
-          width: 18px;
-        }
-        .cell-number {
-          font-size: 12px;
+        .codes-grid {
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 192px), 1fr));
         }
       }
       @media (max-width: 980px) {
@@ -1515,20 +1765,18 @@
         }
         .time-value {
           gap: 5px;
-          flex-wrap: wrap;
         }
-        .rings {
-          gap: 14px;
+        .overview-card {
+          /* 窄卡片将两个读数并列，状态和预估占据同一整行。 */
+          --soc-ring-size: 135px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          row-gap: 14px;
         }
-        .health-block {
-          padding-left: 15px;
-        }
-        .ring {
-          width: 135px;
-          height: 135px;
-        }
-        .rv {
-          font-size: 32px;
+        .battery-status {
+          grid-column: 1 / -1;
+          padding: 10px 0 0;
+          border-left: 0;
+          border-top: 1px solid var(--line);
         }
         .dev-main {
           grid-template-columns: minmax(0, 1fr) 310px;
@@ -1579,7 +1827,9 @@
           padding: 5px 10px;
         }
         .appearance {
-          display: none;
+          min-height: 32px;
+          padding: 5px 6px;
+          font-size: 11px;
         }
         .conn {
           flex-wrap: wrap;
@@ -1603,6 +1853,11 @@
           width: 100%;
           justify-content: space-between;
           align-items: center;
+          flex-wrap: wrap;
+        }
+        .time-readings {
+          flex: 1 1 0;
+          justify-content: flex-start;
         }
         .time-value {
           justify-content: flex-start;
@@ -1612,10 +1867,14 @@
         .dtl {
           font-size: 21px;
         }
-        .dev-main,
-        .iap-main {
+        .dev-main {
           height: auto;
           grid-template-columns: 1fr;
+        }
+        .iap-main {
+          grid-template-columns: minmax(0, 1fr);
+          grid-template-areas: "workflow" "device" "activity";
+          gap: 12px;
         }
         .log-panel {
           min-height: 320px;
@@ -1632,12 +1891,6 @@
         }
         .dt {
           min-height: 82px;
-        }
-        .iap-grid {
-          grid-template-columns: 1fr;
-        }
-        .iap-actions {
-          gap: 8px;
         }
       }
       @media (max-width: 540px) {
@@ -1677,18 +1930,9 @@
           border-radius: 18px;
         }
         .overview-card {
+          /* 手机端的概览占据整行，可使用更大的电量圆环。 */
+          --soc-ring-size: 145px;
           min-height: 190px;
-        }
-        .rings {
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-        }
-        .health-block {
-          padding-left: 24px;
-        }
-        .ring {
-          width: 145px;
-          height: 145px;
         }
         .metrics-grid {
           gap: 12px;
@@ -1700,32 +1944,11 @@
         .metric-value .v {
           font-size: 25px;
         }
-        .cell-grid {
+        .info-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 18px 24px;
-          margin: 20px 0;
         }
-        .cell-number {
-          font-size: 14px;
-        }
-        .capacity-grid {
-          gap: 8px;
-        }
-        .capacity-grid .cell-number {
-          flex-wrap: wrap;
-          font-size: 14px;
-        }
-        .cell-label {
-          font-size: 11px;
-        }
-        .battery-meta,
-        .device-meta,
-        .codes-grid,
         .ports {
           grid-template-columns: 1fr;
-          gap: 12px;
-        }
-        .ports {
           gap: 0;
         }
         .pc:nth-child(3) {
@@ -1771,8 +1994,19 @@
         .gb.c3 {
           min-width: 82px;
         }
-        .iap-actions {
-          grid-template-columns: 1fr;
+        .iap-controls {
+          grid-template-columns: minmax(0, 1fr) minmax(100px, auto);
+          gap: 10px;
+        }
+        .iap-file-picker,
+        .iap-transfer {
+          padding: 12px;
+        }
+        .iap-file-details {
+          column-gap: 7px;
+        }
+        .iap-file-details > div + div {
+          padding-left: 7px;
         }
         .m {
           padding: 12px;
@@ -1786,6 +2020,23 @@
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
+      /* 超窄屏给长文件名和协议选择使用整行宽度。 */
+      @media (max-width: 360px) {
+        .iap-file-picker {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .iap-file-summary {
+          max-width: 100%;
+        }
+        .iap-file-details dd {
+          font-size: 12px;
+          white-space: nowrap;
+        }
+        .iap-controls {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -1793,31 +2044,6 @@
           transition: none !important;
           scroll-behavior: auto !important;
         }
-      }
-      /* 预计放空时长紧邻电量状态，保持原设备数据和分钟单位。 */
-      .estimate-line {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        gap: 5px;
-        margin-top: 12px;
-        font-size: 12px;
-      }
-      .estimate-line .k {
-        color: var(--muted);
-      }
-      .estimate-line .v {
-        font-variant-numeric: tabular-nums;
-      }
-      .codes-grid .kv {
-        grid-template-columns: 1fr;
-        gap: 4px;
-      }
-      .codes-grid .v {
-        text-align: left;
-      }
-      .codes-grid .u {
-        display: none;
       }
       /* 平板及手机端给端口区域独立高度，展开仅增加内部滚动内容。 */
       @media (max-width: 980px) {
@@ -1829,16 +2055,10 @@
         .ports {
           flex: 1 1 0;
         }
-        .codes-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
       }
       @media (max-width: 540px) {
         .codes-grid {
           grid-template-columns: 1fr;
-        }
-        .estimate-line {
-          font-size: 11px;
         }
       }
 
@@ -1903,6 +2123,11 @@
           flex: 1 1 0;
           min-height: 0;
         }
+        /* 数据页保留单屏高度，异常列表超出可用空间时允许外层随内容增高。 */
+        .shell:has(> .app-header #uiDataNav[aria-current="page"]),
+        #normalView {
+          min-height: min-content;
+        }
         .scroll {
           gap: 12px;
         }
@@ -1929,9 +2154,11 @@
           font-size: 14px;
         }
         .data-layout {
+          /* 上方网格随视口分配额外高度，端口区域的尺寸不随异常历史变化。 */
+          --data-view-extra-height: max(0px, 100dvh - 1080px);
           flex: 1 1 0;
-          min-height: 0;
-          grid-template-rows: 176px minmax(264px, 1.15fr) minmax(188px, 0.85fr) minmax(184px, 0.6fr);
+          min-height: min-content;
+          grid-template-rows: 176px calc(264px + var(--data-view-extra-height) * 1.15 / 2.6) calc(188px + var(--data-view-extra-height) * 0.85 / 2.6) minmax(min-content, 1fr);
           gap: 16px;
           align-items: stretch;
         }
@@ -1941,39 +2168,13 @@
           border-radius: 22px;
         }
         .overview-card {
+          /* 宽屏圆环适配首行固定高度。 */
+          --soc-ring-size: 140px;
           min-height: 0;
           padding: 16px 24px;
         }
-        .ring {
-          width: 140px;
-          height: 140px;
-        }
-        .ring::before {
-          inset: 7px;
-        }
-        .rv {
-          font-size: 44px;
-        }
-        .rl,
-        .rs {
-          font-size: 14px;
-        }
-        #sohValue {
-          font-size: 36px;
-        }
-        .health-block {
-          padding-left: 32px;
-        }
-        .st {
-          margin-top: 13px;
-        }
-        .si {
-          padding: 4px 13px;
-          font-size: 14px;
-        }
-        .estimate-line {
-          margin-top: 12px;
-          font-size: 14px;
+        .overview-estimates dd {
+          font-size: 18px;
         }
         .metrics-grid {
           gap: 14px;
@@ -2001,44 +2202,6 @@
           font-size: 16px;
           line-height: 1.4;
         }
-        .cell-grid {
-          gap: 20px;
-          margin: 10px 0;
-        }
-        .cell-reading {
-          gap: 12px;
-        }
-        .cell-icon {
-          width: 25px;
-          height: 38px;
-        }
-        .cell-label {
-          color: var(--text);
-          font-size: 14px;
-        }
-        .cell-number {
-          font-size: 18px;
-          line-height: 1.35;
-        }
-        .cell-number .u {
-          font-size: 14px;
-        }
-        .capacity-grid {
-          padding: 10px 0;
-        }
-        .capacity-grid .cell-number {
-          margin-top: 3px;
-          font-size: 18px;
-        }
-        .battery-meta {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 8px 24px;
-          margin-top: 12px;
-        }
-        .device-meta {
-          gap: 8px 30px;
-          margin-top: 12px;
-        }
         .kv {
           gap: 8px;
           font-size: 14px;
@@ -2046,18 +2209,6 @@
         }
         .kv .u {
           font-size: 13px;
-        }
-        .codes-grid {
-          gap: 10px 20px;
-          padding-top: 10px;
-          margin-top: 10px;
-        }
-        .codes-grid .kv {
-          gap: 3px;
-        }
-        .codes-grid .v {
-          font-size: 13px;
-          line-height: 1.4;
         }
         .ports-card {
           max-height: none;
@@ -2096,17 +2247,12 @@
           gap: 10px;
         }
         .abnormal-card {
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
+          min-height: 184px;
         }
         .abnormal-count {
           font-size: 14px;
         }
         .abnormal-list {
-          flex: 1 1 0;
-          min-height: 0;
-          max-height: none;
           gap: 7px;
           margin-top: 8px;
         }
@@ -2132,17 +2278,6 @@
         .abnormal-empty {
           font-size: 14px;
         }
-        .data-footer {
-          flex: 0 0 auto;
-          min-height: 20px;
-          margin: 0;
-          font-size: 13px;
-          line-height: 20px;
-        }
-        .data-footer .ui-icon {
-          width: 18px;
-          height: 18px;
-        }
         .dev-main {
           flex: 1 1 0;
           min-height: 0;
@@ -2161,9 +2296,7 @@
         .check,
         .stitle,
         .note,
-        .ready,
-        .command-picker > summary,
-        .cell-info-disclosure > summary {
+        .ready {
           font-size: 14px;
         }
         .checks {
@@ -2250,26 +2383,34 @@
         .conn {
           min-height: 30px;
         }
-        .view-heading,
         .dt {
+          min-height: 44px;
+        }
+      }
+      /* 数据页在不足一千零八十像素高的宽屏上使用紧凑卡片。 */
+      @media (min-width: 1600px) and (min-height: 930px) and (max-height: 1079px) {
+        .view-heading {
           min-height: 44px;
         }
         .scroll {
           gap: 10px;
         }
         .data-layout {
-          grid-template-rows: 160px minmax(234px, 1.15fr) minmax(170px, 0.85fr) minmax(124px, 0.6fr);
+          /* 紧凑网格的额外视口高度，单位为像素。 */
+          --data-view-extra-height: calc(100dvh - 930px);
+          grid-template-rows: 160px min(264px, calc(234px + var(--data-view-extra-height) * 1.15 / 2.6)) min(188px, calc(170px + var(--data-view-extra-height) * 0.85 / 2.6)) minmax(min-content, 1fr);
           gap: 12px;
+        }
+        .abnormal-card {
+          min-height: 124px;
         }
         .card {
           padding: 14px;
         }
         .overview-card {
+          /* 紧凑宽屏保留圆环上下的内边距。 */
+          --soc-ring-size: 130px;
           padding: 12px 22px;
-        }
-        .ring {
-          width: 130px;
-          height: 130px;
         }
         .metric {
           padding: 6px 20px;
@@ -2282,21 +2423,6 @@
         .metric-value .v {
           font-size: 30px;
           line-height: 1.1;
-        }
-        .cell-grid {
-          margin: 8px 0;
-        }
-        .capacity-grid {
-          padding: 7px 0;
-        }
-        .battery-meta,
-        .device-meta {
-          gap: 5px 24px;
-          margin-top: 8px;
-        }
-        .codes-grid {
-          margin-top: 8px;
-          padding-top: 8px;
         }
       }
     </style>
@@ -2313,7 +2439,11 @@
           <button id="uiDeveloperNav" class="nav-btn" type="button"><svg class="ui-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16"/></svg>开发者</button>
         </nav>
         <div class="top-actions">
-          <span class="appearance" title="外观随系统浅色或深色主题自动切换"><svg class="ui-icon " viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>跟随系统</span>
+          <select id="themeSelect" class="appearance" aria-label="页面主题">
+            <option value="system">跟随系统</option>
+            <option value="light">白色主题</option>
+            <option value="dark">黑色主题</option>
+          </select>
           <button id="statusConfigBtn" class="state-btn" type="button" title="打开虚拟串口设置"><span class="dot"></span><span id="statusLabel">未连接</span></button>
           <button id="connectToggleBtn" class="main-btn" type="button">🔌 连接</button>
         </div>
@@ -2327,27 +2457,35 @@
         <div class="view-heading">
           <h1>充电宝数据监测</h1>
           <div class="time-bar">
-            <div class="time-value"><span class="t1">设备时间</span><span id="powerDateText" class="t2">---</span><span id="powerTimeText" class="t3">---</span></div>
+            <div class="time-readings">
+              <div class="time-value"><span class="t1">本机时间</span><span id="phoneDateText" class="t2">---</span><span id="phoneTimeText" class="t3">---</span></div>
+              <div class="time-value"><span class="t1">设备时间</span><span id="powerDateText" class="t2">---</span><span id="powerTimeText" class="t3">---</span></div>
+            </div>
             <button id="syncRtcBtn" class="mini" type="button"><svg class="ui-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M20 8a8 8 0 0 0-14-3L3 8m0-5v5h5M4 16a8 8 0 0 0 14 3l3-3m0 5v-5h-5"/></svg>同步 RTC</button>
           </div>
         </div>
         <div class="data-layout">
-          <article class="card overview-card" aria-label="电池电量与健康度">
-            <div class="rings">
-              <div class="rw">
-                <div id="socRing" class="ring" style="--v: 0; --c: #8ec5ff">
-                  <div class="rc"><div id="socValue" class="rv">0%</div><div class="rl">剩余电量</div><div id="socStatusText" class="rs">待机中</div></div>
-                </div>
+          <article class="card overview-card" aria-label="电池概览">
+            <div id="socRing" class="soc-ring" style="--v: 0; --c: #8ec5ff">
+              <div class="soc-content">
+                <div id="socValue" class="overview-value">---</div>
+                <div class="overview-label">剩余电量</div>
               </div>
-              <div class="health-block">
-                <div id="sohRing" class="ring" style="--v: 0; --c: #8ec5ff"><div class="rc"><div id="sohValue" class="rv">0%</div><div class="rl">健康度</div></div></div>
-                <div class="st" aria-label="充放电状态">
-                  <div id="stateIdle" class="si on"><span class="bar"></span><span>空闲</span></div>
-                  <div id="stateCharging" class="si"><span class="bar"></span><span>充电</span></div>
-                  <div id="stateDischarging" class="si"><span class="bar"></span><span>放电</span></div>
-                </div>
-                <div class="estimate-line"><span class="k">预计放空</span><span id="estimateDischargeMinutes" class="v">---</span><span class="u">分钟</span></div>
+            </div>
+            <div class="battery-health">
+              <div class="overview-label">电池健康度</div>
+              <div id="sohValue" class="overview-value">---</div>
+              <div id="sohRing" class="health-track" style="--v: 0; --c: #8ec5ff" aria-hidden="true"></div>
+            </div>
+            <div class="battery-status">
+              <div class="status-heading">
+                <h2>电池状态</h2>
+                <span id="socStatusText" class="overview-status" role="status">---</span>
               </div>
+              <dl class="overview-estimates">
+                <div><dt>预计充满</dt><dd><span id="estimateChargeMinutes">---</span><span class="u">分钟</span></dd></div>
+                <div><dt>预计放空</dt><dd><span id="estimateDischargeMinutes">---</span><span class="u">分钟</span></dd></div>
+              </dl>
             </div>
           </article>
           <div class="metrics-grid">
@@ -2358,24 +2496,34 @@
           </div>
           <article class="card battery-card">
             <h2><svg class="ui-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="m3 8 9-5 9 5-9 5-9-5Zm0 5 9 5 9-5m-18 5 9 5 9-5"/></svg>电池与电芯</h2>
-            <div class="cell-grid">
-              <div class="cell-reading"><svg class="ui-icon cell-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h8v3h3v17H5V5h3Z"/><path d="M8 9h8m-8 4h8m-8 4h8"/></svg><div><div class="cell-label">电芯 1</div><div class="cell-number"><span id="cellVoltage1" class="v">---</span><span class="u">V</span></div></div></div>
-              <div class="cell-reading"><svg class="ui-icon cell-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h8v3h3v17H5V5h3Z"/><path d="M8 9h8m-8 4h8m-8 4h8"/></svg><div><div class="cell-label">电芯 2</div><div class="cell-number"><span id="cellVoltage2" class="v">---</span><span class="u">V</span></div></div></div>
-              <div class="cell-reading"><svg class="ui-icon cell-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h8v3h3v17H5V5h3Z"/><path d="M8 9h8m-8 4h8m-8 4h8"/></svg><div><div class="cell-label">电芯 3</div><div class="cell-number"><span id="cellVoltage3" class="v">---</span><span class="u">V</span></div></div></div>
-              <div class="cell-reading"><svg class="ui-icon cell-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2h8v3h3v17H5V5h3Z"/><path d="M8 9h8m-8 4h8m-8 4h8"/></svg><div><div class="cell-label">电芯 4</div><div class="cell-number"><span id="cellVoltage4" class="v">---</span><span class="u">V</span></div></div></div>
+            <div class="battery-readings">
+              <section class="reading-group">
+                <div class="reading-group-heading">
+                  <h3>电芯电压</h3>
+                  <span class="reading-count">电池串数 <strong id="batteryCellCount">---</strong></span>
+                </div>
+                <dl class="info-grid reading-values cell-voltage-values">
+                  <div><dt>电芯 1</dt><dd><span id="cellVoltage1">---</span><span class="u">V</span></dd></div>
+                  <div><dt>电芯 2</dt><dd><span id="cellVoltage2">---</span><span class="u">V</span></dd></div>
+                  <div><dt>电芯 3</dt><dd><span id="cellVoltage3">---</span><span class="u">V</span></dd></div>
+                  <div><dt>电芯 4</dt><dd><span id="cellVoltage4">---</span><span class="u">V</span></dd></div>
+                </dl>
+              </section>
+              <section class="reading-group">
+                <h3>电池容量</h3>
+                <dl class="info-grid reading-values capacity-values">
+                  <div><dt>当前容量</dt><dd><span id="remainingCapacity">---</span><span class="u">mAh</span></dd></div>
+                  <div><dt>满电容量</dt><dd><span id="fullChargeCapacity">---</span><span class="u">mAh</span></dd></div>
+                  <div><dt>设计容量</dt><dd><span id="designCapacity">---</span><span class="u">mAh</span></dd></div>
+                </dl>
+              </section>
             </div>
-            <div class="capacity-grid">
-              <div><div class="cell-label">当前容量</div><div class="cell-number"><span id="remainingCapacity" class="v">---</span><span class="u">mAh</span></div></div>
-              <div><div class="cell-label">满电容量</div><div class="cell-number"><span id="fullChargeCapacity" class="v">---</span><span class="u">mAh</span></div></div>
-              <div><div class="cell-label">设计容量</div><div class="cell-number"><span id="designCapacity" class="v">---</span><span class="u">mAh</span></div></div>
-            </div>
-            <div class="battery-meta">
-              <div class="kv"><span class="k">电池类型</span><span id="batteryType" class="v">---</span><span class="u"></span></div>
-              <div class="kv"><span class="k">电池厂商</span><span id="batteryVendor" class="v">---</span><span class="u"></span></div>
-              <div class="kv"><span class="k">生产日期</span><span id="productionDate" class="v">---</span><span class="u"></span></div>
-              <div class="kv"><span class="k">预计充满</span><span id="estimateChargeMinutes" class="v">---</span><span class="u">分钟</span></div>
-              <div class="kv"><span class="k">批次序列号</span><span id="batchSerialNumber" class="v">---</span><span class="u"></span></div>
-            </div>
+            <dl class="info-grid">
+              <div><dt>电池类型</dt><dd id="batteryType">---</dd></div>
+              <div><dt>电池厂商</dt><dd id="batteryVendor">---</dd></div>
+              <div><dt>生产日期</dt><dd id="productionDate">---</dd></div>
+              <div><dt>批次序列号</dt><dd id="batchSerialNumber" class="info-code">---</dd></div>
+            </dl>
           </article>
           <article class="card ports-card">
             <h2><svg class="ui-icon " viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4"/><path d="M7 12h10"/></svg>端口信息</h2>
@@ -2383,25 +2531,24 @@
           </article>
           <article class="card device-card">
             <h2><svg class="ui-icon " viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4m6-4v4m-6 12v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/></svg>设备与电芯信息</h2>
-            <div class="device-meta">
-            <div class="kv"><span class="k">硬件版本</span><span id="projectHardwareVersion" class="v">---</span><span class="u"></span></div>
-            <div class="kv"><span class="k">软件版本</span><span id="projectSoftwareVersion" class="v">---</span><span class="u"></span></div>
-            <div class="kv"><span class="k">产品日期</span><span id="projectProductDate" class="v">---</span><span class="u"></span></div>
-            <div class="kv"><span class="k">电芯型号</span><span id="cellInfoModel" class="v">---</span><span class="u"></span></div>
-            </div>
-            <div class="codes-grid">
-            <div class="kv"><span class="k">编码 1</span><span id="cellInfoCode1" class="v">---</span><span class="u"></span></div>
-            <div class="kv"><span class="k">编码 2</span><span id="cellInfoCode2" class="v">---</span><span class="u"></span></div>
-            <div class="kv"><span class="k">编码 3</span><span id="cellInfoCode3" class="v">---</span><span class="u"></span></div>
-            <div class="kv"><span class="k">编码 4</span><span id="cellInfoCode4" class="v">---</span><span class="u"></span></div>
-            </div>
+            <dl class="info-grid">
+              <div><dt>硬件版本</dt><dd id="projectHardwareVersion">---</dd></div>
+              <div><dt>软件版本</dt><dd id="projectSoftwareVersion">---</dd></div>
+              <div><dt>产品日期</dt><dd id="projectProductDate">---</dd></div>
+              <div><dt>电芯型号</dt><dd id="cellInfoModel" class="info-code">---</dd></div>
+            </dl>
+            <dl class="info-grid codes-grid">
+              <div><dt>电芯 1 编码</dt><dd id="cellInfoCode1" class="info-code">---</dd></div>
+              <div><dt>电芯 2 编码</dt><dd id="cellInfoCode2" class="info-code">---</dd></div>
+              <div><dt>电芯 3 编码</dt><dd id="cellInfoCode3" class="info-code">---</dd></div>
+              <div><dt>电芯 4 编码</dt><dd id="cellInfoCode4" class="info-code">---</dd></div>
+            </dl>
           </article>
           <article class="card abnormal-card">
             <div class="head"><svg class="ui-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M13 3v5h5M9 12h6m-6 4h6"/></svg><span>异常历史</span><span id="abnormalRecordCount" class="abnormal-count" aria-live="polite">--- 条记录</span></div>
             <div id="abnormalInfo" class="abnormal-list" role="list" aria-label="异常历史记录"><div class="sub abnormal-empty">正在读取</div></div>
           </article>
         </div>
-        <footer class="data-footer"><svg class="ui-icon " viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><span>本机时间</span><span id="phoneDateText">---</span><span id="phoneTimeText">---</span></footer>
       </main>
       <section id="developerView" class="view dev" style="display: none">
         <div class="dt"><h1 class="dtl">开发者模式</h1><div class="dtr"><div id="passthroughReadyText" class="ready">透传未连接</div><button id="exitDevBtn" class="ob" type="button">返回数据界面</button></div></div>
@@ -2507,10 +2654,15 @@
                   GET_INFO
                 </button>
               </div>
+              <button id="cmdGetCellModelBtn" class="b ghost full" type="button">读取电芯型号</button>
               <div class="stitle" style="font-size: 12px; color: var(--text)">
                 读取数据
               </div>
-              <details class="command-picker"><summary><span id="uiDataTypeLabel">选择数据字段</span></summary><div id="getDataTypeGrid" class="cg"></div></details>
+              <div id="getDataTypeGrid" class="cg" role="group" aria-label="读取数据"></div>
+              <div id="getCellVoltageIndexRow" hidden>
+                <label for="getCellVoltageIndex">电芯编号</label>
+                <select id="getCellVoltageIndex" class="f"></select>
+              </div>
               <button id="sendGetDataBtn" class="b full" type="button">
                 发送 GET_DATA
               </button>
@@ -2566,9 +2718,9 @@
                     发送测试数据
                   </button>
                 </div>
-                <details class="cell-info-disclosure"><summary>电芯型号与编码</summary><div class="cell-info-admin">
+                <div class="cell-info-admin">
                   <div class="stitle" style="font-size: 13px; color: var(--text)">
-                    Cell_Info 设置与回读
+                    电芯型号与编码
                   </div>
                   <div id="cellInfoSetTip" class="note ok">未读取电芯信息</div>
                   <div class="cell-info-edit-row">
@@ -2611,7 +2763,6 @@
                     <button id="sendSetCellInfoBtn" class="b" type="button">设置电芯信息</button>
                   </div>
                 </div>
-                </details>
                 <button id="openIapBtn" class="b full" type="button">
                   更新程序
                 </button>
@@ -2620,25 +2771,34 @@
           </section>
         </div>
       </section>
-      <section id="iapView" class="view iap" style="display: none">
-        <div class="dt">
-          <div class="dtl">更新程序</div>
-          <div class="dtr">
-            <div id="iapStateText" class="ready">等待读取 option bytes</div>
-            <button id="iapBackDataBtn" class="ob" type="button">
-              返回数据界面
-            </button>
-            <button id="iapBackDevBtn" class="ob" type="button">
-              返回开发者模式
-            </button>
-          </div>
-        </div>
+      <section id="iapView" class="view iap" style="display: none" aria-labelledby="iapTitle">
+        <header class="dt">
+          <h1 id="iapTitle" tabindex="-1">更新程序</h1>
+          <nav class="dtr" aria-label="更新程序导航">
+            <button id="iapBackDataBtn" class="ob" type="button">返回数据界面</button>
+            <button id="iapBackDevBtn" class="ob" type="button">返回开发者模式</button>
+          </nav>
+        </header>
         <div class="iap-main">
-          <div class="iap-panel">
-            <div class="dtit">下载配置</div>
-            <div class="iap-grid">
+          <section class="iap-panel iap-workflow" aria-labelledby="iapWorkflowTitle">
+            <h2 id="iapWorkflowTitle">固件下载</h2>
+            <div class="iap-file-picker">
+              <div class="iap-file-summary">
+                <div class="iap-label">固件文件</div>
+                <strong id="iapFileName" class="iap-file-name">未选择 .bin 文件</strong>
+                <div id="iapFileDir" class="iap-file-dir" hidden></div>
+              </div>
+              <input id="iapFileInput" type="file" accept=".bin" hidden />
+              <button id="iapChooseFileBtn" class="b ghost" type="button">选择文件</button>
+            </div>
+            <dl class="iap-file-details">
+              <div><dt>原始大小</dt><dd id="iapFileRawSize">---</dd></div>
+              <div><dt>传输大小</dt><dd id="iapFileTxSize">---</dd></div>
+              <div><dt>CRC-32</dt><dd id="iapFileCrc32" class="iap-mono">---</dd></div>
+            </dl>
+            <div class="iap-controls">
               <div class="iap-field">
-                <div class="stitle">传输协议</div>
+                <label class="iap-label" for="iapProtocolSelect">传输协议</label>
                 <select id="iapProtocolSelect" class="f">
                   <option value="xmodem-128">Xmodem - 128</option>
                   <option value="xmodem-1k">Xmodem - 1K</option>
@@ -2646,52 +2806,45 @@
                   <option value="ymodem-1k" selected>Ymodem - 1K</option>
                 </select>
               </div>
-              <div class="iap-field">
-                <div class="stitle">校验模式</div>
-                <input id="iapCheckModeDisplay" class="f" type="text" readonly value="等待设备响应" />
+              <button id="iapDownloadBtn" class="b" type="button" aria-describedby="iapDownloadHint" disabled>开始下载</button>
+            </div>
+            <p id="iapDownloadHint" class="iap-download-hint" hidden></p>
+            <div class="iap-transfer">
+              <div class="iap-transfer-head">
+                <div>
+                  <div id="iapProgressLabel" class="iap-label">下载进度</div>
+                  <p id="iapDownloadState" class="iap-transfer-state">未开始</p>
+                </div>
+                <strong id="iapProgressText" class="iap-progress-value" aria-hidden="true">0%</strong>
               </div>
-            </div>
-            <input id="iapFileInput" class="iap-file" type="file" accept=".bin" />
-            <div class="iap-actions">
-              <button id="iapChooseFileBtn" class="b ghost" type="button">
-                选择文件
-              </button>
-              <button id="iapDownloadBtn" class="b" type="button">下载</button>
-              <button id="iapDemoBtn" class="b ghost" type="button">
-                测试演示
-              </button>
-            </div>
-            <div class="iap-grid">
-              <div class="iap-panel" style="padding: 10px">
-                <div class="stitle">文件信息</div>
-                <div class="iap-kv"><span>目录</span><span id="iapFileDir">---</span></div>
-                <div class="iap-kv"><span>文件名</span><span id="iapFileName">---</span></div>
-                <div class="iap-kv"><span>原始大小</span><span id="iapFileRawSize">---</span></div>
-                <div class="iap-kv"><span>传输大小</span><span id="iapFileTxSize">---</span></div>
-                <div class="iap-kv"><span>CRC-32</span><span id="iapFileCrc32">---</span></div>
+              <div id="iapProgress" class="iap-progress" role="progressbar" aria-labelledby="iapProgressLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <span id="iapProgressBar" aria-hidden="true"></span>
               </div>
-              <div class="iap-panel" style="padding: 10px">
-                <div class="stitle">Option Bytes</div>
-                <div class="iap-kv"><span>BOOT_State</span><span id="iapBootState">---</span></div>
-                <div class="iap-kv"><span>APP_SIZE</span><span id="iapAppSize">---</span></div>
-                <div class="iap-kv"><span>APP容量</span><span id="iapAppCapacity">---</span></div>
-                <div class="iap-kv"><span>APP_CRC32</span><span id="iapAppCrc32">---</span></div>
-                <div class="iap-kv"><span>协议</span><span id="iapFileProtocol">---</span></div>
-                <div class="iap-kv"><span>文件信息</span><span id="iapDeviceFileName">---</span></div>
-                <div class="iap-kv"><span>读取次数</span><span id="iapOptionAttempts">0</span></div>
-              </div>
+              <dl class="iap-transfer-meta">
+                <div><dt>校验模式</dt><dd id="iapCheckModeDisplay">等待设备响应</dd></div>
+                <div><dt>剩余字节</dt><dd id="iapRemainBytes">---</dd></div>
+              </dl>
             </div>
-          </div>
-          <div class="iap-panel">
-            <div class="dtit">下载状态</div>
-            <div class="iap-progress" aria-label="下载进度">
-              <span id="iapProgressBar"></span>
+          </section>
+          <section class="iap-panel iap-device" aria-labelledby="iapDeviceTitle">
+            <div class="iap-panel-heading">
+              <h2 id="iapDeviceTitle">Option Bytes</h2>
+              <div id="iapStateText" class="ready iap-link-status" role="status">设备未连接</div>
             </div>
-            <div class="iap-kv"><span>进度</span><span id="iapProgressText">0%</span></div>
-            <div class="iap-kv"><span>剩余字节</span><span id="iapRemainBytes">---</span></div>
-            <div class="iap-kv"><span>状态</span><span id="iapDownloadState">未开始</span></div>
-            <div id="iapLog" class="iap-log">暂无 IAP 日志</div>
-          </div>
+            <dl class="iap-device-info">
+              <div><dt>BOOT_State</dt><dd id="iapBootState">---</dd></div>
+              <div><dt>APP 容量</dt><dd id="iapAppCapacity">---</dd></div>
+              <div><dt>APP_SIZE</dt><dd id="iapAppSize">---</dd></div>
+              <div><dt>APP_CRC32</dt><dd id="iapAppCrc32" class="iap-mono">---</dd></div>
+              <div><dt>传输协议</dt><dd id="iapFileProtocol">---</dd></div>
+              <div><dt>设备文件</dt><dd id="iapDeviceFileName">---</dd></div>
+              <div><dt>读取次数</dt><dd id="iapOptionAttempts">0</dd></div>
+            </dl>
+          </section>
+          <section class="iap-panel iap-activity" aria-labelledby="iapLogTitle">
+            <h2 id="iapLogTitle">传输日志</h2>
+            <pre id="iapLog" class="iap-log" aria-labelledby="iapLogTitle" tabindex="0">暂无 IAP 日志</pre>
+          </section>
         </div>
       </section>
     </div>
@@ -2790,10 +2943,14 @@
         const CMD_GET_ABNORMAL_INFO = 0x0a;
         /* 查询电池异常历史分页的命令。 */
         const CMD_GET_ABNORMAL_PAGE = 0x0b;
-        /* 上位机固定显示四个编码槽，并读取编号一至四。 */
+        /* 网页支持的最大串数，电芯编号从一开始。 */
         const CELL_INFO_NUM = 4;
         /* 电芯设置应答及读取应答的等待时间，单位为毫秒。 */
         const CELL_INFO_TIMEOUT_MS = 3000;
+        /* 每次等待设备返回就绪应答的时间，单位为毫秒。 */
+        const SERIAL_WAKE_TIMEOUT_MS = 300;
+        /* 首次发送可能只唤醒串口，允许再发送一次唤醒请求。 */
+        const SERIAL_WAKE_ATTEMPTS = 2;
         const IAP_CMD_GET_ACK = 0x00,
           IAP_CMD_GET_OPTION_BYTES = 0x01,
           IAP_CMD_SET_BOOT_STATE = 0x02,
@@ -2841,41 +2998,57 @@
             "BOOT_STATE_APP",
             "BOOT_STATE_NUM",
           ];
-        const DT_TEMP = 0,
-          DT_VOLT = 1,
-          DT_C1 = 2,
-          DT_C2 = 3,
-          DT_CUR = 4,
-          DT_RC = 5,
-          DT_FC = 6,
-          DT_DC = 7,
-          DT_TTE = 8,
-          DT_TTF = 9,
-          DT_CYCLE = 10,
-          DT_SOC = 11,
-          DT_SOH = 12,
-          DT_COUNT = 13,
-          DT_TYPE = 14,
-          DT_VENDOR = 15,
-          DT_DATE = 16,
-          DT_STATUS = 17,
-          DT_MAX = DT_STATUS;
-        const STATIC_TYPES = [DT_DC, DT_TYPE, DT_VENDOR, DT_DATE],
+        /* 电池串数的读取类型，回复值为一字节。 */
+        const DT_COUNT = 0x00;
+        /* 电池总电压的读取类型，单位为mV。 */
+        const DT_VOLT = 0x01;
+        /* 单节电压的读取类型，后接一字节编号，单位为mV。 */
+        const DT_CELL_VOLTAGE = 0x02;
+        /* 电池电流的读取类型，单位为mA。 */
+        const DT_CUR = 0x03;
+        /* 电池温度的读取类型，单位为0.1°C。 */
+        const DT_TEMP = 0x04;
+        /* 剩余电量的读取类型，单位为百分比。 */
+        const DT_SOC = 0x05;
+        /* 电池健康度的读取类型，单位为百分比。 */
+        const DT_SOH = 0x06;
+        /* 充放电状态的读取类型。 */
+        const DT_STATUS = 0x07;
+        /* 预计充满时间的读取类型，单位为分钟。 */
+        const DT_TTF = 0x08;
+        /* 预计放空时间的读取类型，单位为分钟。 */
+        const DT_TTE = 0x09;
+        /* 剩余容量的读取类型，单位为mAh。 */
+        const DT_RC = 0x0a;
+        /* 满充容量的读取类型，单位为mAh。 */
+        const DT_FC = 0x0b;
+        /* 设计容量的读取类型，单位为mAh。 */
+        const DT_DC = 0x0c;
+        /* 充放电循环次数的读取类型。 */
+        const DT_CYCLE = 0x0d;
+        /* 电池类型的读取类型，回复值为ASCII文本。 */
+        const DT_TYPE = 0x0e;
+        /* 电池厂商的读取类型，回复值为ASCII文本。 */
+        const DT_VENDOR = 0x0f;
+        /* 电池生产日期的读取类型，回复值为ASCII文本。 */
+        const DT_DATE = 0x10;
+        /* 批次序列号的读取类型，回复值为ASCII文本。 */
+        const DT_BATCH_SERIAL = 0x11;
+        /* GET_CELL_INFO的公共型号编号，不依赖设备串数。 */
+        const CELL_MODEL_INDEX = 0x00;
+        const STATIC_TYPES = [DT_DC, DT_TYPE, DT_VENDOR, DT_DATE, DT_BATCH_SERIAL],
           DYNAMIC_TYPES = [
-            DT_TEMP,
             DT_VOLT,
-            DT_C1,
-            DT_C2,
             DT_CUR,
-            DT_RC,
-            DT_FC,
-            DT_TTE,
-            DT_TTF,
-            DT_CYCLE,
+            DT_TEMP,
             DT_SOC,
             DT_SOH,
-            DT_COUNT,
             DT_STATUS,
+            DT_TTF,
+            DT_TTE,
+            DT_RC,
+            DT_FC,
+            DT_CYCLE,
           ];
         const PORT_COUNT = 4,
           MIN_CMD_MS = 5,
@@ -2883,25 +3056,26 @@
           DEV_TAP_MS = 800,
           ADMIN_NAME = "Psthk",
           ADMIN_PWD = "Lyh21180201";
+        /* 开发者读取选项按GET_DATA的连续类型编号排列。 */
         const GET_DATA_OPTS = [
-          [0, "电池温度"],
-          [1, "电池总电压"],
-          [2, "第一节电压"],
-          [3, "第二节电压"],
-          [4, "电池电流"],
-          [5, "剩余容量"],
-          [6, "满充容量"],
-          [7, "设计容量"],
-          [8, "预计放空时间"],
-          [9, "预计充满时间"],
-          [10, "循环次数"],
-          [11, "SOC电量"],
-          [12, "SOH健康度"],
-          [13, "电池串数"],
-          [14, "电池类型"],
-          [15, "电池厂商"],
-          [16, "电池出厂日期"],
-          [17, "充放电状态"],
+          [DT_COUNT, "电池串数"],
+          [DT_VOLT, "电池总电压"],
+          [DT_CELL_VOLTAGE, "单节电芯电压"],
+          [DT_CUR, "电池电流"],
+          [DT_TEMP, "电池温度"],
+          [DT_SOC, "SOC电量"],
+          [DT_SOH, "SOH健康度"],
+          [DT_STATUS, "充放电状态"],
+          [DT_TTF, "预计充满时间"],
+          [DT_TTE, "预计放空时间"],
+          [DT_RC, "剩余容量"],
+          [DT_FC, "满充容量"],
+          [DT_DC, "设计容量"],
+          [DT_CYCLE, "循环次数"],
+          [DT_TYPE, "电池类型"],
+          [DT_VENDOR, "电池厂商"],
+          [DT_DATE, "电池出厂日期"],
+          [DT_BATCH_SERIAL, "批次序列号"],
         ];
         const RTC_OPTS = [
             [0, "正常时间"],
@@ -2983,15 +3157,23 @@
           connectionQ: Promise.resolve(),
           serialGeneration: 0,
           writeQ: Promise.resolve(),
+          /* 串口写队列当前等待的就绪应答。 */
+          pendingSerialWake: null,
           isConnected: false,
           pendingStatic: new Set(STATIC_TYPES),
           pendingProjectInfo: true,
+          /* 尚未收到独立的公共型号应答。 */
+          pendingCellModel: true,
           pendingCellInfo: true,
+          /* 当前串口连接已确认的电池串数。 */
+          cellCount: null,
+          /* 等待电池串数应答的共享查询。 */
+          pendingCellCount: null,
           bufData: [],
           bufIap: [],
-          soc: 0,
-          soh: 0,
-          status: 0,
+          soc: null,
+          soh: null,
+          status: null,
           bat: null,
           projectInfo: null,
           cellInfo: null,
@@ -3019,7 +3201,8 @@
           logs: [],
           /* 透传日志清空代次，用于丢弃清空前启动的异步发送记录。 */
           logGeneration: 0,
-          getDataType: 0,
+          /* 开发者页面默认选中排在首位的电池串数。 */
+          getDataType: DT_COUNT,
           getRtcFmt: 0,
           setRtcFmt: 0,
           protType: 0,
@@ -3046,18 +3229,17 @@
           cellInfoWriteBatch: null,
           lastCmdNano: 0,
           phoneMs: Date.now(),
-          pbMs: new Date(2026, 2, 31, 0, 0, 0, 0).getTime(),
-          pbDefault: new Date(2026, 2, 31, 0, 0, 0, 0).getTime(),
+          pbMs: null,
           phoneTimer: null,
           dataToken: 0,
           portToken: 0,
-          portFrameExpect: 0,
-          portFrameLastTs: 0,
           timedTimer: null,
           iapFile: null,
           iapFileDirText: "",
           iapFileBytes: null,
           iapTxBytes: null,
+          /* 文件或传输协议变化时计算的预览 CRC-32。 */
+          iapFileCrc32: null,
           iapProtocol: "ymodem-1k",
           iapCheck: "auto",
           iapWaiters: [],
@@ -3088,7 +3270,6 @@
           iapProgress: 0,
           iapRemainBytes: null,
           iapDownloadState: "未开始",
-          iapDownloadTimer: null,
           iapTransfer: null,
           iapLogs: [],
         };
@@ -3113,9 +3294,6 @@
           phoneTimeText: gid("phoneTimeText"),
           powerDateText: gid("powerDateText"),
           powerTimeText: gid("powerTimeText"),
-          stateIdle: gid("stateIdle"),
-          stateCharging: gid("stateCharging"),
-          stateDischarging: gid("stateDischarging"),
           socRing: gid("socRing"),
           sohRing: gid("sohRing"),
           socValue: gid("socValue"),
@@ -3125,10 +3303,14 @@
           packCurrent: gid("packCurrent"),
           batteryTemperature: gid("batteryTemperature"),
           cycleCount: gid("cycleCount"),
-          cellVoltage1: gid("cellVoltage1"),
-          cellVoltage2: gid("cellVoltage2"),
-          cellVoltage3: gid("cellVoltage3"),
-          cellVoltage4: gid("cellVoltage4"),
+          /* 电芯电压显示控件，数组下标对应编号减一。 */
+          cellVoltages: [gid("cellVoltage1"), gid("cellVoltage2"), gid("cellVoltage3"), gid("cellVoltage4")],
+          /* 设备返回的串数显示控件。 */
+          batteryCellCount: gid("batteryCellCount"),
+          /* 开发者页单节电压命令的编号选择区。 */
+          getCellVoltageIndexRow: gid("getCellVoltageIndexRow"),
+          /* 开发者页单节电压命令的编号选择控件。 */
+          getCellVoltageIndex: gid("getCellVoltageIndex"),
           estimateChargeMinutes: gid("estimateChargeMinutes"),
           estimateDischargeMinutes: gid("estimateDischargeMinutes"),
           remainingCapacity: gid("remainingCapacity"),
@@ -3172,6 +3354,8 @@
           adminLoginBtn: gid("adminLoginBtn"),
           cmdGetAckBtn: gid("cmdGetAckBtn"),
           cmdGetInfoBtn: gid("cmdGetInfoBtn"),
+          /* 开发者页面的公共型号读取按钮。 */
+          cmdGetCellModelBtn: gid("cmdGetCellModelBtn"),
           getDataTypeGrid: gid("getDataTypeGrid"),
           sendGetDataBtn: gid("sendGetDataBtn"),
           rtcFormatGrid: gid("rtcFormatGrid"),
@@ -3203,6 +3387,8 @@
           sendSetCellInfoBtn: gid("sendSetCellInfoBtn"),
           openIapBtn: gid("openIapBtn"),
           iapView: gid("iapView"),
+          /* 进入更新程序页时用于交接键盘焦点。 */
+          iapTitle: gid("iapTitle"),
           iapStateText: gid("iapStateText"),
           iapBackDataBtn: gid("iapBackDataBtn"),
           iapBackDevBtn: gid("iapBackDevBtn"),
@@ -3211,7 +3397,8 @@
           iapFileInput: gid("iapFileInput"),
           iapChooseFileBtn: gid("iapChooseFileBtn"),
           iapDownloadBtn: gid("iapDownloadBtn"),
-          iapDemoBtn: gid("iapDemoBtn"),
+          /* 文件选定但串口未连接时显示下载条件。 */
+          iapDownloadHint: gid("iapDownloadHint"),
           iapFileDir: gid("iapFileDir"),
           iapFileName: gid("iapFileName"),
           iapFileRawSize: gid("iapFileRawSize"),
@@ -3224,6 +3411,8 @@
           iapFileProtocol: gid("iapFileProtocol"),
           iapDeviceFileName: gid("iapDeviceFileName"),
           iapOptionAttempts: gid("iapOptionAttempts"),
+          /* 屏幕阅读器使用的进度条容器。 */
+          iapProgress: gid("iapProgress"),
           iapProgressBar: gid("iapProgressBar"),
           iapProgressText: gid("iapProgressText"),
           iapRemainBytes: gid("iapRemainBytes"),
@@ -3247,10 +3436,8 @@
             packCurrent: "---",
             batteryTemperature: "---",
             cycleCount: "---",
-            cellVoltage1: "---",
-            cellVoltage2: "---",
-            cellVoltage3: "---",
-            cellVoltage4: "---",
+            /* 单节电芯电压的显示值，单位为V。 */
+            cellVoltages: Array(CELL_INFO_NUM).fill("---"),
             estimateChargeMinutes: "---",
             estimateDischargeMinutes: "---",
             remainingCapacity: "---",
@@ -3271,7 +3458,7 @@
         }
         /* 创建一个公共型号和四个编码槽的默认显示数据。 */
         function defCellInfo() {
-          return { model: "---", codes: Array(CELL_INFO_NUM).fill("---") };
+          return { model: "---", codes: Array(CELL_INFO_NUM).fill(null) };
         }
         function defPorts() {
           const m = new Map();
@@ -3419,6 +3606,7 @@
             : "透传未连接";
           el.passthroughReadyText.classList.toggle("ok", ready);
           updPerm();
+          if (app.iap) renderIap();
         }
         function lvlColor(v) {
           v = Math.max(0, Math.min(100, Number(v) || 0));
@@ -3436,45 +3624,53 @@
           if (v <= 70) return mix(c[2], c[3], (v - 45) / 25);
           return mix(c[3], c[4], (v - 70) / 30);
         }
+        /* 刷新剩余电量、健康度和当前电池状态。 */
         function renderRings() {
-          const soc = Math.max(0, Math.min(100, app.soc)),
-            soh = Math.max(0, Math.min(100, app.soh)),
-            sc = lvlColor(soc),
-            hc = lvlColor(soh);
+          /* 当前剩余电量，单位为百分比。 */
+          const soc = app.soc ?? 0;
+          /* 当前电池健康度，单位为百分比。 */
+          const soh = app.soh ?? 0;
           el.socRing.style.setProperty("--v", String(soc));
-          el.socRing.style.setProperty("--c", sc);
+          el.socRing.style.setProperty("--c", lvlColor(soc));
           el.sohRing.style.setProperty("--v", String(soh));
-          el.sohRing.style.setProperty("--c", hc);
-          el.socValue.textContent = `${soc}%`;
-          el.sohValue.textContent = `${soh}%`;
-          el.stateIdle.classList.toggle("on", app.status === 0);
-          el.stateCharging.classList.toggle("on", app.status === 1);
-          el.stateDischarging.classList.toggle("on", app.status === 2);
-          el.socStatusText.textContent =
-            app.status === 1
-              ? soc >= 100
-                ? "已充满"
-                : "充电中..."
-              : app.status === 2
-                ? "放电中"
-                : "待机中";
+          el.sohRing.style.setProperty("--c", lvlColor(soh));
+          el.socValue.textContent = app.soc == null ? "---" : `${soc}%`;
+          el.sohValue.textContent = app.soh == null ? "---" : `${soh}%`;
+          /* 充电状态下达到百分之百时显示已充满。 */
+          let statusText = "---";
+          if (app.status === 0) {
+            statusText = "待机中";
+          } else if (app.status === 1) {
+            statusText = soc >= 100 ? "已充满" : "充电中";
+          } else if (app.status === 2) {
+            statusText = "放电中";
+          }
+          el.socStatusText.dataset.state = String(app.status ?? "");
+          /* 状态实际变化时才更新提示，避免轮询期间反复播报。 */
+          if (el.socStatusText.textContent !== statusText) {
+            el.socStatusText.textContent = statusText;
+          }
         }
         function renderTime() {
           el.phoneDateText.textContent = fDate(app.phoneMs);
           el.phoneTimeText.textContent = fTime(app.phoneMs);
-          el.powerDateText.textContent = fDate(app.pbMs);
-          el.powerTimeText.textContent = fTime(app.pbMs);
+          el.powerDateText.textContent = app.pbMs == null ? "---" : fDate(app.pbMs);
+          el.powerTimeText.textContent = app.pbMs == null ? "---" : fTime(app.pbMs);
         }
+        /* 刷新电池数据和各节电芯电压的显示。 */
         function renderBat() {
+          /* 当前电池测量值及静态信息。 */
           const d = app.bat;
           el.packVoltage.textContent = d.packVoltage;
           el.packCurrent.textContent = d.packCurrent;
           el.batteryTemperature.textContent = d.batteryTemperature;
           el.cycleCount.textContent = d.cycleCount;
-          el.cellVoltage1.textContent = d.cellVoltage1;
-          el.cellVoltage2.textContent = d.cellVoltage2;
-          el.cellVoltage3.textContent = d.cellVoltage3;
-          el.cellVoltage4.textContent = d.cellVoltage4;
+          el.batteryCellCount.textContent = app.cellCount == null ? "---" : `${app.cellCount} 串`;
+          /* 串数未知时显示全部占位，确认后隐藏超出串数的编号。 */
+          for (let index = 0; index < CELL_INFO_NUM; index++) {
+            el.cellVoltages[index].closest("div").hidden = index >= (app.cellCount ?? CELL_INFO_NUM);
+            el.cellVoltages[index].textContent = d.cellVoltages[index];
+          }
           el.estimateChargeMinutes.textContent = d.estimateChargeMinutes;
           el.estimateDischargeMinutes.textContent = d.estimateDischargeMinutes;
           el.remainingCapacity.textContent = d.remainingCapacity;
@@ -3485,24 +3681,29 @@
           el.productionDate.textContent = d.productionDate;
           el.batchSerialNumber.textContent = d.batchSerialNumber;
         }
-        /* 刷新公共型号及四条编码，并同步整批电芯操作期间的控件状态。 */
+        /* 刷新公共型号及有效编码，并同步电芯操作期间的控件状态。 */
         function renderDeviceInfo() {
           /* 整批读取或设置完成前，避免用户交叉提交电芯操作。 */
-          const busy = !!app.pendingCellRead || !!app.pendingCellWrite || !!app.cellInfoWriteBatch;
+          const busy = !!app.pendingCellCount || !!app.pendingCellRead || !!app.pendingCellWrite || !!app.cellInfoWriteBatch;
           el.projectHardwareVersion.textContent = app.projectInfo.hardwareVersion;
           el.projectSoftwareVersion.textContent = app.projectInfo.softwareVersion;
           el.projectProductDate.textContent = app.projectInfo.productDate;
           el.cellInfoModel.textContent = app.cellInfo.model;
-          el.cellInfoModelInput.disabled = busy;
-          el.cellInfoModelSelected.disabled = busy;
+          el.cellInfoModelInput.disabled = busy || app.cellCount == null;
+          el.cellInfoModelSelected.disabled = busy || app.cellCount == null;
           /* 每个编号只更新自己的显示和输入控件状态。 */
           for (let index = 0; index < CELL_INFO_NUM; index++) {
-            el.cellInfoCodes[index].textContent = app.cellInfo.codes[index];
-            el.cellInfoCodeInputs[index].disabled = busy;
-            el.cellInfoCodeSelected[index].disabled = busy;
+            /* 设置控件只用于设备已确认存在的编号。 */
+            const inactive = index >= (app.cellCount ?? 0);
+            /* 监测页面在串数未知时仍显示全部编码占位。 */
+            el.cellInfoCodes[index].parentElement.hidden = app.cellCount != null && inactive;
+            el.cellInfoCodes[index].textContent = app.cellInfo.codes[index] ?? "---";
+            el.cellInfoCodeInputs[index].closest(".cell-info-edit-row").hidden = inactive;
+            el.cellInfoCodeInputs[index].disabled = busy || inactive;
+            el.cellInfoCodeSelected[index].disabled = busy || inactive;
           }
           el.sendGetCellInfoBtn.disabled = busy;
-          el.sendSetCellInfoBtn.disabled = busy;
+          el.sendSetCellInfoBtn.disabled = busy || app.cellCount == null;
           if (el.cellInfoSetTip) el.cellInfoSetTip.textContent = app.cellInfoSetTip;
         }
         const protErr = (e) =>
@@ -3563,7 +3764,7 @@
                 raw !== "NONE",
               ph = !allowData,
               txt = (v) => (ph ? "---" : v),
-              num = (v) => (ph ? "---" : String(v)),
+              num = (v) => (ph || p.systemPort ? "---" : String(v)),
               directPower = !ph && p.systemPort && Number.isFinite(p.powerMw),
               canPower =
                 directPower ||
@@ -3580,8 +3781,8 @@
               pdRaw = pdProto(p.pdProtocolType),
               dpRaw = dpdm(p.dpdmProtocolCode),
               hRaw = p.pdHandshakeOk ? pdRaw : dpRaw,
-              hTxt = txt(hRaw),
-              role = txt(pdRole(p.pdDataRole)),
+              hTxt = p.systemPort ? "---" : txt(hRaw),
+              role = p.systemPort ? "---" : txt(pdRole(p.pdDataRole)),
               stable = txt(raw),
               direct =
                 pdRaw === "SPR_PPS" ||
@@ -3589,7 +3790,7 @@
                 pdRaw === "SPR_AVS",
               fix = pdRaw === "FIXED" && p.negotiatedVoltageMv > 7000,
               noPd = !p.pdHandshakeOk && p.negotiatedVoltageMv > 7000,
-              hi = ph ? false : p.pdHandshakeOk ? direct || fix : noPd,
+              hi = ph || p.systemPort ? false : p.pdHandshakeOk ? direct || fix : noPd,
               sc =
                 p.lastErrorCode != null
                   ? "#ffb7c4"
@@ -3774,9 +3975,11 @@
           if (app.iapLogs.length > 80) app.iapLogs = app.iapLogs.slice(-80);
           renderIap();
         }
+        /* 显示 IAP 文件预览、设备参数和传输进度，保持日志阅读位置。 */
         function renderIap() {
           if (!el.iapView) return;
-          const p = Math.max(0, Math.min(100, app.iapProgress || 0));
+          /* 显示与辅助技术使用同一个进度百分比。 */
+          const p = Math.max(0, Math.min(100, Math.round(app.iapProgress || 0)));
           const transferBusy =
             app.iapBusy ||
             app.iapCanceling ||
@@ -3785,36 +3988,39 @@
           el.iapProtocolSelect.disabled = transferBusy;
           el.iapFileInput.disabled = transferBusy;
           el.iapChooseFileBtn.disabled = transferBusy;
-          el.iapDownloadBtn.disabled = transferBusy;
-          el.iapDemoBtn.disabled = transferBusy;
+          /* 启动下载只依赖文件与串口，下载流程会重新确认设备参数。 */
+          const serialReady = app.isConnected && !!app.writer;
+          /* 只有完成文件读取和协议转换后，才允许下载。 */
+          const fileReady = !!app.iapFile && !!app.iapFileBytes && !!app.iapTxBytes;
+          el.iapDownloadBtn.disabled = transferBusy || !serialReady || !fileReady;
+          el.iapDownloadHint.hidden = transferBusy || serialReady || !fileReady;
+          el.iapDownloadHint.textContent = el.iapDownloadHint.hidden ? "" : "连接设备后即可开始下载";
+          el.iapChooseFileBtn.textContent = fileReady ? "更换文件" : "选择文件";
           el.iapProtocolSelect.value = app.iapProtocol;
-          el.iapCheckModeDisplay.value = iapCheckName();
+          el.iapCheckModeDisplay.textContent = iapCheckName();
+          /* 设备参数状态独立于当前本地文件。 */
           const optionReady = app.iapAppSize != null && app.iapBootState != null;
-          el.iapStateText.textContent = !app.iapConnected
-            ? "等待 GET_ACK"
-            : optionReady
-              ? `option bytes 已读取：${bootStateName(app.iapBootState)}`
-              : "等待读取 option bytes";
-          el.iapStateText.classList.toggle("ok", app.iapConnected && optionReady);
-          el.iapFileDir.textContent = app.iapFile ? app.iapFileDirText : "---";
-          el.iapFileName.textContent = app.iapFile ? app.iapFile.name : "---";
+          /* 串口已连接时区分唤醒等待与参数读取。 */
+          const deviceStatus = !serialReady ? "设备未连接" : !app.iapConnected ? "等待 GET_ACK" : optionReady ? "参数已读取" : "正在读取参数";
+          if (el.iapStateText.textContent !== deviceStatus) el.iapStateText.textContent = deviceStatus;
+          el.iapStateText.classList.toggle("ok", serialReady && app.iapConnected && optionReady);
+          el.iapFileDir.textContent = app.iapFile ? app.iapFileDirText : "";
+          el.iapFileDir.hidden = !el.iapFileDir.textContent;
+          el.iapFileName.textContent = app.iapFile ? app.iapFile.name : "未选择 .bin 文件";
           el.iapFileRawSize.textContent = app.iapFile
             ? fmtBytes(app.iapFileBytes?.length ?? app.iapFile.size)
             : "---";
           el.iapFileTxSize.textContent = app.iapTxBytes
             ? fmtBytes(app.iapTxBytes.length)
             : "---";
-          el.iapFileCrc32.textContent = app.iapTxBytes
-            ? hex32(crc32(app.iapTxBytes))
-            : "---";
+          el.iapFileCrc32.textContent = app.iapFileCrc32 == null ? "---" : hex32(app.iapFileCrc32);
           el.iapBootState.textContent =
             app.iapBootState == null
               ? "---"
               : `${bootStateName(app.iapBootState)} (${app.iapBootState})`;
           el.iapAppSize.textContent =
             app.iapAppSize == null ? "---" : fmtBytes(app.iapAppSize);
-          el.iapAppCapacity.textContent =
-            app.iapAppCapacity == null ? "设备未提供" : fmtBytes(app.iapAppCapacity);
+          el.iapAppCapacity.textContent = app.iapAppCapacity != null ? fmtBytes(app.iapAppCapacity) : optionReady ? "设备未提供" : "---";
           el.iapAppCrc32.textContent =
             app.iapAppCrc32 == null ? "---" : hex32(app.iapAppCrc32);
           el.iapFileProtocol.textContent =
@@ -3826,22 +4032,32 @@
             : "---";
           el.iapOptionAttempts.textContent = String(app.iapOptionAttempts);
           el.iapProgressBar.style.setProperty("--p", `${p}%`);
-          el.iapProgressText.textContent = `${Math.round(p)}%`;
+          el.iapProgress.setAttribute("aria-valuenow", String(p));
+          el.iapProgressText.textContent = `${p}%`;
           el.iapRemainBytes.textContent =
             app.iapRemainBytes == null ? "---" : fmtBytes(app.iapRemainBytes);
           el.iapDownloadState.textContent = app.iapDownloadState;
-          el.iapLog.textContent = app.iapLogs.length
-            ? app.iapLogs.join("\n")
-            : "暂无 IAP 日志";
-          el.iapLog.scrollTop = el.iapLog.scrollHeight;
+          /* 日志有更新且原来在末尾时才跟随，便于检查前面的记录。 */
+          const logText = app.iapLogs.length ? app.iapLogs.join("\n") : "暂无 IAP 日志";
+          if (el.iapLog.textContent !== logText) {
+            /* 记录更新前的阅读位置。 */
+            const scrollTop = el.iapLog.scrollTop;
+            /* 允许浏览器缩放带来的滚动小数误差。 */
+            const followTail = el.iapLog.scrollHeight - el.iapLog.clientHeight - scrollTop <= 2;
+            el.iapLog.textContent = logText;
+            el.iapLog.scrollTop = followTail ? el.iapLog.scrollHeight : scrollTop;
+          }
         }
+        /* 根据选中的文件和传输协议更新大小及 CRC-32 预览。 */
         function refreshIapFileDerived() {
           if (!app.iapFileBytes) {
             app.iapTxBytes = null;
+            app.iapFileCrc32 = null;
             renderIap();
             return;
           }
           app.iapTxBytes = buildIapTxBytes(app.iapFileBytes);
+          app.iapFileCrc32 = crc32(app.iapTxBytes);
           app.iapRemainBytes = app.iapTxBytes.length;
           app.iapProgress = 0;
           app.iapDownloadState = "文件已就绪";
@@ -4009,20 +4225,21 @@
             return false;
           }
           try {
-            await qwrite(
-              frame,
-              true,
-              writeGeneration,
-              writeWriter,
-              operationGeneration,
-            );
-            if (
-              writeGeneration !== app.serialGeneration ||
-              writeWriter !== app.writer ||
-              (transferInput && !isIapCommandContextActive(transferInput))
-            )
+            /* IAP控制帧使用独立的AA 55就绪握手，并复核轮询或升级操作是否仍有效。 */
+            const sent = await qwrite(frame, true, writeGeneration, writeWriter, operationGeneration, {
+              channel: "iap",
+              /* 初始GET_ACK应答会启动Option Bytes轮询，属于正常的轮询代次切换。 */
+              isActive: () => isIapCommandContextActive(transferInput),
+              logGeneration,
+            });
+            if (writeGeneration !== app.serialGeneration || writeWriter !== app.writer) return false;
+            if (!sent) {
+              if (isIapCommandContextActive(transferInput)) {
+                if (tip) toast("未收到 IAP GET_ACK 就绪应答，命令未发送");
+                if (app.iapBusy) addIapLog(`${name} 未完成：未收到 IAP GET_ACK 就绪应答`);
+              }
               return false;
-            addLog("发送", frame, logGeneration);
+            }
             addIapLog(`${name} -> ${shortHex(frame, 64)}`);
             return true;
           } catch (_) {
@@ -4233,13 +4450,11 @@
           const cmd = rawCmd & 0x7f;
           let option = null;
           if (cmd === IAP_CMD_GET_ACK) {
-            if (p && p.length && (p[0] & 255) === 0x01) {
+            if (!app.iapConnected) {
               app.iapConnected = true;
               stopIapAckPoll();
               addIapLog("设备 IAP 连接正常，GET_ACK 响应为 1");
-              if (app.iapAppSize == null) startIapOptionPoll();
-            } else if (p && p.length) {
-              addIapLog("设备 GET_ACK 响应为 0，连接未确认");
+              if (app.iapAppSize == null && !app.iapBusy) startIapOptionPoll();
             }
           } else if (cmd === IAP_CMD_GET_OPTION_BYTES) {
             option = applyIapOptionBytes(p);
@@ -4261,15 +4476,12 @@
             writeWriter = app.writer;
           /* 每次停止都废弃尚未完成的异步步骤，防止旧流程在重连或新一轮下载中继续运行。 */
           app.iapOperationGeneration += 1;
+          if (app.pendingSerialWake?.channel === "iap") finishSerialWake(app.pendingSerialWake, false);
           app.iapBusy = false;
           stopIapAckPoll();
           stopIapOptionPoll();
           clearIapWaiters();
           app.bufIap.length = 0;
-          if (app.iapDownloadTimer) {
-            clearInterval(app.iapDownloadTimer);
-            app.iapDownloadTimer = null;
-          }
           stopIapTransfer();
           if (
             !hadActiveOperation ||
@@ -4319,6 +4531,7 @@
           renderIap();
           return cancelPromise;
         }
+        /* 返回浏览器实际提供的文件目录，无法读取时隐藏目录字段。 */
         function iapFileDirectoryText(file) {
           if (!file) return "";
           if (typeof file.path === "string" && file.path) {
@@ -4329,7 +4542,7 @@
             const i = file.webkitRelativePath.lastIndexOf("/");
             return i >= 0 ? file.webkitRelativePath.slice(0, i) || "." : ".";
           }
-          return "浏览器安全限制：当前网页环境无法读取真实目录";
+          return "";
         }
         async function chooseIapFile(file) {
           if (!file) return false;
@@ -4364,6 +4577,10 @@
               app.iapFileDirText = "";
               app.iapFileBytes = null;
               app.iapTxBytes = null;
+              app.iapFileCrc32 = null;
+              app.iapRemainBytes = null;
+              app.iapProgress = 0;
+              app.iapDownloadState = "文件大小不能为 0";
               toast("文件大小不能为 0");
               addIapLog("已拒绝 0 字节文件，避免 Ymodem 空数据包");
               return false;
@@ -4374,7 +4591,7 @@
             app.iapFileBytes = fileBytes;
             refreshIapFileDerived();
             addIapLog(
-              `已选择文件 ${file.name}，${iapProtocol().name} 传输大小 ${fmtBytes(app.iapTxBytes.length)}，CRC-32 ${hex32(crc32(app.iapTxBytes))}`,
+              `已选择文件 ${file.name}，${iapProtocol().name} 传输大小 ${fmtBytes(app.iapTxBytes.length)}，CRC-32 ${hex32(app.iapFileCrc32)}`,
             );
             return true;
           } catch (error) {
@@ -4387,18 +4604,14 @@
           } finally {
             if (loadGeneration === app.iapOperationGeneration) {
               app.iapBusy = false;
+              /* 文件读取会使旧轮询代次失效，恢复尚未完成的设备状态读取。 */
+              if (app.iap && app.isConnected && app.writer) {
+                if (!app.iapConnected) startIapAckPoll();
+                else if (app.iapAppSize == null) startIapOptionPoll();
+              }
               renderIap();
             }
           }
-        }
-        function createDemoBin() {
-          const size = 7357;
-          const bytes = new Uint8Array(size);
-          for (let i = 0; i < size; i++) bytes[i] = (i * 31 + 17) & 255;
-          return new File([bytes], "iap-demo.bin", {
-            type: "application/octet-stream",
-            lastModified: Date.now(),
-          });
         }
         function clearIapTransferTimers(t = app.iapTransfer) {
           if (!t) return;
@@ -5173,53 +5386,6 @@
           }, 10000);
           renderIap();
         }
-        async function startIapTestProgram(reason = "测试演示") {
-          if (
-            app.iapBusy ||
-            app.iapCanceling ||
-            (app.iapTransfer && app.iapTransfer.active)
-          ) {
-            toast("IAP任务正在进行，请勿重复启动");
-            return;
-          }
-          if (!app.iapTxBytes) {
-            const selected = await chooseIapFile(createDemoBin());
-            if (!selected || !app.iap) return;
-          }
-          if (!app.iapTxBytes) {
-            toast("文件未选择");
-            return;
-          }
-          /* 演示期间暂停设备轮询并锁定配置，避免 GET_ACK 把演示完成状态覆盖。 */
-          stopIapAckPoll();
-          stopIapOptionPoll();
-          clearIapWaiters();
-          stopIapDownload(false);
-          app.iapBusy = true;
-          const total = app.iapTxBytes.length;
-          let sent = 0;
-          app.iapProgress = 0;
-          app.iapRemainBytes = total;
-          app.iapDownloadState = `${reason}中（不发送设备命令）`;
-          addIapLog(
-            `${reason}：${iapProtocol().name} 仅执行测试程序，不发送 IAP / Xmodem 数据 / ${fmtBytes(total)}`,
-          );
-          app.iapDownloadTimer = setInterval(() => {
-            const step = Math.max(64, Math.ceil(total / 32));
-            sent = Math.min(total, sent + step);
-            app.iapProgress = total ? (sent / total) * 100 : 100;
-            app.iapRemainBytes = Math.max(0, total - sent);
-            if (sent >= total) {
-              stopIapDownload(false);
-              app.iapDownloadState = `${reason}完成`;
-              addIapLog(`${reason}完成，进度条和剩余字节已归零`);
-              toast(`${reason}完成`);
-            } else {
-              renderIap();
-            }
-          }, 120);
-          renderIap();
-        }
         async function startIapDownload() {
           if (
             app.iapBusy ||
@@ -5282,7 +5448,6 @@
             app.dev = false;
             stopPoll();
             startIapAckPoll();
-            toast("已进入更新程序界面");
           } else {
             stopIapAckPoll();
             stopIapOptionPoll();
@@ -5294,6 +5459,11 @@
             toast(backToDev ? "已返回开发者模式" : "已返回数据界面");
           }
           renderDev();
+          if (on) {
+            /* 避免继承开发者页面的滚动量，让移动端先看到下载操作。 */
+            window.scrollTo(0, 0);
+            el.iapTitle.focus({ preventScroll: true });
+          }
         }
         function parseHex(s) {
           const c = String(s || "")
@@ -5447,27 +5617,97 @@
           }
           app.lastCmdNano = nano();
         }
-        /* 串行写入串口，bytes为待发数据，th控制节流，generation与writer限定连接，operationGeneration限定IAP操作，pollToken限定异常轮询。 */
-        async function qwrite(bytes, th = false, generation = app.serialGeneration, writer = app.writer, operationGeneration = null, pollToken = null) {
-          /* 固化本次发送内容，避免排队期间被调用方修改。 */
+        /* 完成当前就绪等待，request限定等待对象，ready表示收到有效应答。 */
+        function finishSerialWake(request, ready) {
+          if (!request || app.pendingSerialWake !== request) return;
+          app.pendingSerialWake = null;
+          clearTimeout(request.timer);
+          request.resolve(ready);
+        }
+        /* 处理已通过帧校验的就绪应答，channel限定协议，cmd与payload为应答内容。 */
+        function handleSerialWake(channel, cmd, payload) {
+          if (cmd !== CMD_ACK && cmd !== (CMD_ACK | 0x80)) return false;
+          /* 当前等待的协议和发送上下文必须与应答一致。 */
+          const request = app.pendingSerialWake;
+          if (!request || request.channel !== channel || !request.isCurrent()) return true;
+          if (payload.length !== 1 || payload[0] !== 0x01) return true;
+          finishSerialWake(request, true);
+          /* 仅将主动查询的GET_ACK交还页面处理，内部唤醒应答不改变页面状态。 */
+          return !request.explicit;
+        }
+        /* 在已占用的写队列内等待就绪应答，frame为唤醒帧，writer和options限定本次发送。 */
+        async function waitSerialWake(frame, writer, options) {
+          /* 发送次数，首次可能只触发MCU从睡眠唤醒。 */
+          for (let attempt = 0; attempt < SERIAL_WAKE_ATTEMPTS && options.isCurrent(); attempt++) {
+            /* 下发前登记等待对象，避免漏掉紧随发送而来的应答。 */
+            const request = { ...options, resolve: null, timer: null };
+            /* 本次唤醒尝试的应答结果。 */
+            const response = new Promise((resolve) => {
+              request.resolve = resolve;
+            });
+            app.pendingSerialWake = request;
+            request.timer = setTimeout(() => finishSerialWake(request, false), SERIAL_WAKE_TIMEOUT_MS);
+            try {
+              await writer.write(frame);
+              if (writer === app.writer && options.logGeneration != null) addLog("发送", frame, options.logGeneration);
+            } catch (error) {
+              finishSerialWake(request, false);
+              throw error;
+            }
+            if (await response) return true;
+            if (options.isCurrent() && attempt + 1 < SERIAL_WAKE_ATTEMPTS) await throttle();
+          }
+          return false;
+        }
+        /* 串行写入串口，th控制节流，generation与writer限定连接，operationGeneration限定IAP操作，options指定握手和页面上下文。 */
+        async function qwrite(bytes, th = false, generation = app.serialGeneration, writer = app.writer, operationGeneration = null, options = {}) {
+          /* 固化发送内容，透传分段也在同一次排队中完成。 */
           const payload = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes || []);
-          if (!writer)
-            throw new Error("writer missing");
-          /* 写队列执行时复核连接、升级操作和异常轮询上下文。 */
-          const operation = async () => {
-            if (generation !== app.serialGeneration || writer !== app.writer || (operationGeneration != null && operationGeneration !== app.iapOperationGeneration))
-              throw new Error("stale serial write");
-            if (th)
+          /* 入队时的数据页代次，用于取消翻页前的普通请求。 */
+          const pageToken = app.dataToken;
+          /* 唤醒帧的协议类型，X/Ymodem流不携带唤醒帧。 */
+          const channel = options.channel ?? null;
+          /* 异常查询所属的轮询代次。 */
+          const pollToken = options.pollToken ?? null;
+          /* 每次连续写入的透传分段字节数。 */
+          const chunkSize = options.chunkSize ?? payload.length;
+          if (!writer) throw new Error("writer missing");
+          /* 连接、页面、轮询或IAP操作变更后，旧握手及其业务数据均失效。 */
+          function isCurrent() {
+            if (generation !== app.serialGeneration || writer !== app.writer || (operationGeneration != null && operationGeneration !== app.iapOperationGeneration)) return false;
+            if (channel === "data" && (pageToken !== app.dataToken || isIapSerialBusy())) return false;
+            if (channel === "iap" && (!app.iap || app.iapCanceling)) return false;
+            if (options.isActive && !options.isActive()) return false;
+            return pollToken == null || (pollToken === app.dataToken && !app.dev && !app.pendingCellRead && !app.pendingCellWrite && !app.cellInfoWriteBatch);
+          }
+          /* 单个队列任务完成完整握手及业务写入，避免并发命令插入两者之间。 */
+          async function operation() {
+            if (!isCurrent()) return false;
+            if (th || channel) await throttle();
+            if (!isCurrent()) return false;
+            if (channel) {
+              /* 普通协议使用AA BB，IAP控制协议使用AA 55。 */
+              const wakeFrame = channel === "iap" ? iapPkt(IAP_CMD_GET_ACK, new Uint8Array()) : pkt(CMD_ACK, new Uint8Array());
+              /* GET_ACK本身就是唤醒请求，识别完全匹配的帧以避免重复发送。 */
+              const explicit = payload.length === wakeFrame.length && payload.every((value, index) => value === wakeFrame[index]);
+              /* 只在收到就绪应答后放行同一队列任务内的业务数据。 */
+              const ready = await waitSerialWake(wakeFrame, writer, { channel, explicit, isCurrent, logGeneration: options.logGeneration });
+              if (explicit) return ready;
+              if (!ready || !isCurrent()) return false;
+              /* 保持同一串口上的命令间隔，防止就绪应答后紧邻的新命令被合并接收。 */
               await throttle();
-            if (generation !== app.serialGeneration || writer !== app.writer || (operationGeneration != null && operationGeneration !== app.iapOperationGeneration))
-              throw new Error("stale serial write");
-            /* 异常查询实际写入前再次检查页面与事务状态，取消已排队的旧请求。 */
-            if (pollToken != null && (pollToken !== app.dataToken || app.dev || isIapSerialBusy() || app.pendingCellRead || app.pendingCellWrite || app.cellInfoWriteBatch))
-              return false;
-            await writer.write(payload);
-            if (generation !== app.serialGeneration || writer !== app.writer || (operationGeneration != null && operationGeneration !== app.iapOperationGeneration))
-              throw new Error("stale serial write");
-          };
+            }
+            /* 透传分段保持连续，X/Ymodem控制字符和数据块也走此写队列。 */
+            for (let offset = 0; offset < payload.length; offset += chunkSize) {
+              if (!isCurrent()) return false;
+              await writer.write(payload.subarray(offset, offset + chunkSize));
+            }
+            if (generation !== app.serialGeneration || writer !== app.writer) return false;
+            /* 发出的数据应计入透传记录，即使设备应答已经结束该业务事务。 */
+            if (channel) app.lastCmdNano = nano();
+            if (options.logGeneration != null) addLog("发送", payload, options.logGeneration);
+            return operationGeneration == null || operationGeneration === app.iapOperationGeneration;
+          }
           app.writeQ = app.writeQ.catch(() => undefined).then(operation);
           return app.writeQ;
         }
@@ -5558,16 +5798,19 @@
           }
           return fs;
         }
+        /* 按小端顺序解析至多四字节整数，signed指定是否按补码解释。 */
         function leInt(raw, signed = false) {
           if (!raw || !raw.length) return null;
           const sz = Math.min(raw.length, 4);
           let v = 0;
           for (let i = 0; i < sz; i++) v |= (raw[i] & 255) << (i * 8);
-          if (!signed) return v >>> 0;
+          /* 先转成无符号数，避免四字节负数重复减去取值范围。 */
+          const unsigned = v >>> 0;
+          if (!signed) return unsigned;
           const bits = sz * 8,
             sign = 1 << (bits - 1),
             range = 2 ** bits;
-          return v & sign ? v - range : v;
+          return unsigned & sign ? unsigned - range : unsigned;
         }
         function ascii(raw) {
           if (!raw || !raw.length) return null;
@@ -5576,6 +5819,39 @@
             .replace(/\u0000/g, " ")
             .trim();
           return t || null;
+        }
+        /* 解析包含类型字节的串数应答，返回网页支持的串数。 */
+        function decodeCellCount(payload) {
+          if (payload.length !== 2 || payload[1] < 1 || payload[1] > CELL_INFO_NUM) {
+            return null;
+          }
+          return payload[1];
+        }
+        /* 解析指定编号的单节电压应答，返回编号及电压值，单位为mV。 */
+        function decodeCellVoltage(payload) {
+          if (payload.length !== 4 || payload[1] < 1 || payload[1] > (app.cellCount ?? 0)) {
+            return null;
+          }
+          return { index: payload[1], mv: leInt(payload.subarray(2)) };
+        }
+        /* 解析批次序列号，应答允许可打印ASCII及用于填充的空字节。 */
+        function decodeBatchSerial(bytes) {
+          if (!bytes.every((byte) => byte === 0 || (byte >= 0x20 && byte <= 0x7e))) {
+            return null;
+          }
+          return ascii(bytes);
+        }
+        /* 校验公共型号文本，bytes只包含型号的ASCII字节。 */
+        function decodeCellModel(bytes) {
+          if (bytes.length < 1 || bytes.length > 24) return null;
+          /* 按原始字节校验，拒绝小写、空白和填充字符。 */
+          const model = String.fromCharCode(...bytes);
+          return /[^A-Z0-9-]/.test(model) ? null : model;
+        }
+        /* 解析编号零的GET_CELL_INFO应答，raw包含编号、长度和型号。 */
+        function parseCellModelInfo(raw) {
+          if (raw.length < 3 || raw[0] !== CELL_MODEL_INDEX || raw[1] !== raw.length - 2) return null;
+          return decodeCellModel(raw.subarray(2));
         }
         function parseProjectInfo(raw) {
           if (!raw || raw.length < 7) return null;
@@ -5610,10 +5886,10 @@
           const codeLen = raw[codeLenPos] & 255;
           if (codeLen < 1 || codeLen > 24 || codeLenPos + 1 + codeLen !== raw.length) return null;
           /* 严格保留原始型号字符，避免去空格或替换零字节掩盖非法响应。 */
-          const model = String.fromCharCode(...raw.slice(2, codeLenPos));
+          const model = decodeCellModel(raw.slice(2, codeLenPos));
           /* 当前编号的原始编码文本。 */
           const code = String.fromCharCode(...raw.slice(codeLenPos + 1));
-          if (!/^[A-Z0-9-]{1,24}$/.test(model) || !/^[A-Z0-9-]{1,24}$/.test(code)) return null;
+          if (!model || !/^[A-Z0-9-]{1,24}$/.test(code)) return null;
           return { index, model, code };
         }
         function commandName(cmd) {
@@ -5647,11 +5923,26 @@
             meaning = info
               ? `硬件版本：${info.hardwareVersion}\n软件版本：${info.softwareVersion}\n产品日期：${info.productDate}`
               : "工程信息格式无效";
-          } else if (cmd === CMD_DATA && payload.length >= 2) {
-            const type = payload[0] & 255,
-              option = GET_DATA_OPTS.find((item) => item[0] === type),
-              value = payload.slice(1),
+          } else if (cmd === CMD_DATA && payload.length) {
+            /* 查找回复所使用的数据字段。 */
+            const type = payload[0];
+            /* 开发者页面中对应的数据类型名称。 */
+            const option = GET_DATA_OPTS.find((item) => item[0] === type);
+            /* 类型字节之后的数据。 */
+            const value = payload.subarray(1);
+            /* 校验并生成回复提示中的值。 */
+            let textValue = null;
+            if (type === DT_CELL_VOLTAGE) {
+              /* 包含电芯编号及毫伏值的应答。 */
+              const cell = decodeCellVoltage(payload);
+              if (cell) textValue = `电芯 ${cell.index}，${cell.mv} mV`;
+            } else if (type === DT_COUNT) {
+              textValue = decodeCellCount(payload);
+            } else if (type === DT_BATCH_SERIAL) {
+              textValue = decodeBatchSerial(value);
+            } else if (option) {
               textValue = type >= DT_TYPE && type <= DT_DATE ? ascii(value) : leInt(value, type === DT_TEMP || type === DT_CUR);
+            }
             meaning = `数据类型：${option ? option[1] : `0x${type.toString(16).toUpperCase().padStart(2, "0")}`}\n解析值：${textValue == null ? "无效" : textValue}`;
           } else if (cmd === CMD_RTC) {
             const ms = rtc(payload);
@@ -5659,7 +5950,7 @@
           } else if (cmd === CMD_SET_RTC)
             meaning = payload[0] === 1 ? "RTC设置成功" : "RTC设置失败：参数错误";
           else if (cmd === CMD_PORT) {
-            const port = decodePort(payload, null);
+            const port = decodePort(payload);
             meaning = port
               ? `端口：${port.portId}\n状态：${outState(port.stableOutputState)}\n功率：${port.systemPort ? `${port.powerMw} mW` : "详见数据界面"}`
               : "端口数据格式无效或端口不存在";
@@ -5670,9 +5961,15 @@
           } else if (cmd === CMD_SET_TEST)
             meaning = payload[0] === 1 ? "测试参数设置成功，已触发回读" : "测试参数设置失败";
           else if (cmd === CMD_GET_CELL_INFO) {
-            /* 按固定带编号格式解析读取应答。 */
-            const info = parseCellInfo(payload);
-            meaning = info ? "编码编号：" + info.index + "\n公共型号：" + info.model + "\n电芯编码：" + info.code : "电芯信息格式无效";
+            if (payload[0] === CELL_MODEL_INDEX) {
+              /* 编号零应答只包含公共型号。 */
+              const model = parseCellModelInfo(payload);
+              meaning = model ? "公共型号：" + model : "公共型号应答格式无效";
+            } else {
+              /* 按固定带编号格式解析单节编码及附带型号。 */
+              const info = parseCellInfo(payload);
+              meaning = info ? "编码编号：" + info.index + "\n公共型号：" + info.model + "\n电芯编码：" + info.code : "电芯信息格式无效";
+            }
           } else if (cmd === CMD_SET_CELL_INFO) {
             if (payload.length === 3) {
               /* 设置应答第二字节为字段，第三字节为结果码。 */
@@ -5711,6 +6008,7 @@
             a = Math.abs(n);
           return `${sg}${Math.floor(a / 10)}.${a % 10}`;
         };
+        /* 读取标准RTC应答，并保留已有设备时间格式的兼容解析。 */
         function rtc(raw) {
           if (!raw || !raw.length) return null;
           const min = 0,
@@ -5770,6 +6068,13 @@
               return null;
             return Date.UTC(y, m - 1, d, h - 8, mi, s, 0);
           };
+          /* 完整的标准 RTC 应答按固定格式解析，避免按当前时间猜测字节顺序。 */
+          if (raw.length === 9 && raw[0] === 0) return struct(0);
+          if (raw.length === 4 || (raw.length === 5 && raw[0] === 1)) {
+            /* 秒值使用北京时间口径，转换成页面内部的UTC毫秒。 */
+            const seconds = u32le(raw.length - 4);
+            return seconds <= maxS ? seconds * 1000 - BEIJING_OFFSET : null;
+          }
           const ds = Array.from(raw, (b) => {
             const ch = String.fromCharCode(b & 255);
             return /\d/.test(ch) ? ch : " ";
@@ -5829,11 +6134,12 @@
           }
           return best;
         }
-        function decodePort(raw, fallbackPortId = null) {
+        /* 根据应答自带的端口编号解析简版或完整端口数据。 */
+        function decodePort(raw) {
           if (raw && raw.length === 6) {
             const portId = raw[0] & 255,
               systemState = raw[1] & 255;
-            if (portId >= 3 || systemState > 2) return null;
+            if (portId >= PORT_COUNT || systemState > 2) return null;
             const protocolState =
                 systemState === 1 ? 2 : systemState === 2 ? 1 : 0,
               powerMw =
@@ -5857,37 +6163,26 @@
               portCurrentRefreshed: false,
             };
           }
-          if (!raw || raw.length < 15) return null;
+          if (!raw || raw.length !== 15) return null;
           const b0 = raw[0] & 255,
             b1 = raw[1] & 255,
             portType = raw[14] & 255,
             r16 = (i) => (raw[i] & 255) | ((raw[i + 1] & 255) << 8),
             fb = (b0 >> 5) & 0x03;
           const en = portType !== 0;
-          const t = en
-            ? fb >= 0 && fb < PORT_COUNT
-              ? fb
-              : null
-            : fallbackPortId != null &&
-                fallbackPortId >= 0 &&
-                fallbackPortId < PORT_COUNT
-              ? fallbackPortId
-              : fb >= 0 && fb < PORT_COUNT
-                ? fb
-                : null;
-          if (t == null) return null;
+          if (fb >= PORT_COUNT) return null;
           if (!en)
             return {
-              portId: t,
+              portId: fb,
               enableKnown: true,
               portEnabled: false,
               hasData: false,
               lastErrorCode: null,
-              feedbackPortId: t,
+              feedbackPortId: fb,
               portType,
             };
           return {
-            portId: t,
+            portId: fb,
             enableKnown: true,
             portEnabled: true,
             hasData: true,
@@ -5909,16 +6204,18 @@
             dpdmProtocolCode: raw[12] & 255,
             protectionFlags: raw[13] & 255,
             portType,
+            /* 完整回复使用实测电压和电流计算功率。 */
+            systemPort: false,
           };
         }
-        function nextExpectedPortFrame() {
-          const now = Date.now();
-          if (now - app.portFrameLastTs > 120) app.portFrameExpect = 0;
-          const t = app.portFrameExpect;
-          app.portFrameExpect = (app.portFrameExpect + 1) % PORT_COUNT;
-          app.portFrameLastTs = now;
-          return t;
+        /* 更新公共型号，syncInput为真时同步未编辑且未勾选的输入。 */
+        function applyCellModel(model, syncInput) {
+          app.cellInfo.model = model;
+          if (syncInput && !el.cellInfoModelSelected.checked && el.cellInfoModelInput.dataset.cellInfoEdited !== "1") {
+            el.cellInfoModelInput.value = model;
+          }
         }
+        /* 将普通协议应答分派到对应的数据、端口和电芯事务。 */
         function onDataFrame(rawCmd, p) {
           const cmd = rawCmd & 0x7f;
           if (cmd === CMD_INFO) {
@@ -5930,16 +6227,27 @@
             return;
           }
           if (cmd === CMD_GET_CELL_INFO) {
+            if (p[0] === CELL_MODEL_INDEX) {
+              /* 公共型号应答不需要串数，也不修改按节读取事务。 */
+              const model = parseCellModelInfo(p);
+              if (!model) return;
+              app.pendingCellModel = false;
+              applyCellModel(model, !app.pendingCellWrite);
+              renderDeviceInfo();
+              return;
+            }
             /* 当前读取批次及收到的编号化应答。 */
             const read = app.pendingCellRead;
             /* 已通过长度、编号和字符集校验的电芯数据。 */
             const info = parseCellInfo(p);
-            if (!read || !info || read.generation !== app.serialGeneration || !read.sent.has(info.index) || !read.pending.has(info.index)) return;
+            if (!read || !info || info.index > (app.cellCount ?? 0) || read.generation !== app.serialGeneration || !read.sent.has(info.index) || !read.pending.has(info.index)) return;
             read.pending.delete(info.index);
-            app.cellInfo.model = info.model;
+            /* 独立应答优先用于显示，公共型号设置后的回读仍更新实际值。 */
+            if (app.pendingCellModel || read.write?.field === 0) {
+              applyCellModel(info.model, !read.write);
+            }
             app.cellInfo.codes[info.index - 1] = info.code;
             /* 已编辑或勾选的输入保留用户待发送值，避免回读覆盖后续设置。 */
-            if (!read.write && !el.cellInfoModelSelected.checked && el.cellInfoModelInput.dataset.cellInfoEdited !== "1") el.cellInfoModelInput.value = info.model;
             if (!read.write && !el.cellInfoCodeSelected[info.index - 1].checked && el.cellInfoCodeInputs[info.index - 1].dataset.cellInfoEdited !== "1") el.cellInfoCodeInputs[info.index - 1].value = info.code;
             renderDeviceInfo();
             /* 设置回读只校验本次固定的编号、字段和期望文本。 */
@@ -5981,7 +6289,21 @@
           if (cmd === CMD_DATA) {
             if (!p || p.length < 2) return;
             const t = p[0] & 255;
-            if (t < 0 || t > DT_MAX) return;
+            if (t === DT_COUNT) {
+              /* 确认串数后才允许按编号收发电芯数据。 */
+              const count = decodeCellCount(p);
+              if (count == null) return;
+              applyCellCount(count);
+              return;
+            }
+            if (t === DT_CELL_VOLTAGE) {
+              /* 应答中的电芯编号用于定位电压显示槽。 */
+              const cell = decodeCellVoltage(p);
+              if (!cell) return;
+              app.bat.cellVoltages[cell.index - 1] = m2u(cell.mv);
+              renderBat();
+              return;
+            }
             const vr = p.slice(1),
               vu = leInt(vr, false),
               d = app.bat;
@@ -5996,14 +6318,6 @@
               case DT_VOLT:
                 if (vu == null) return;
                 app.bat = { ...d, packVoltage: m2u(vu) };
-                break;
-              case DT_C1:
-                if (vu == null) return;
-                app.bat = { ...d, cellVoltage1: m2u(vu) };
-                break;
-              case DT_C2:
-                if (vu == null) return;
-                app.bat = { ...d, cellVoltage2: m2u(vu) };
                 break;
               case DT_CUR: {
                 const vs = leInt(vr, true);
@@ -6062,8 +6376,6 @@
                 if (vu == null) return;
                 app.soh = Math.max(0, Math.min(100, vu));
                 break;
-              case DT_COUNT:
-                break;
               case DT_TYPE: {
                 const v = ascii(vr);
                 if (!v) return;
@@ -6083,6 +6395,14 @@
                 if (!v) return;
                 app.bat = { ...d, productionDate: normDate(v) };
                 app.pendingStatic.delete(DT_DATE);
+                break;
+              }
+              case DT_BATCH_SERIAL: {
+                /* 合法批次号收到后才停止该字段的静态轮询。 */
+                const serial = decodeBatchSerial(vr);
+                if (!serial) return;
+                app.bat = { ...d, batchSerialNumber: serial };
+                app.pendingStatic.delete(DT_BATCH_SERIAL);
                 break;
               }
               case DT_STATUS:
@@ -6106,19 +6426,16 @@
                 }
                 break;
               default:
-                break;
+                return;
             }
             renderBat();
             renderRings();
             return;
           }
           if (cmd === CMD_PORT) {
-            const exp = app.dev ? null : nextExpectedPortFrame(),
-              dec = decodePort(p, exp);
+            /* 用应答自带的编号更新端口，其他端口缺包不会影响本帧。 */
+            const dec = decodePort(p);
             if (!dec) return;
-            if (!app.dev) {
-              if (dec.feedbackPortId !== exp) return;
-            }
             const t = dec.portId,
               old = app.portsInfo.get(t) || {};
             app.portsInfo.set(t, {
@@ -6253,12 +6570,9 @@
           }
           /* 首次读取期间显示正在读取，完成空历史后显示暂无异常记录。 */
           const content = items.length ? items.join("") : '<div class="sub abnormal-empty">' + (app.abnormal.summary ? "暂无异常记录" : "正在读取") + "</div>";
-          /* 查询进度变化时复用现有列表，数据更新时保留用户滚动位置。 */
+          /* 查询进度变化时复用现有列表，记录变化时仅更新列表内容。 */
           if (box.innerHTML !== content) {
-            /* 列表当前滚动偏移，单位为像素。 */
-            const scrollTop = box.scrollTop;
             box.innerHTML = content;
-            box.scrollTop = scrollTop;
           }
         }
         /* 校验异常载荷，cmd为命令字，p为已通过公共CRC8校验的响应。 */
@@ -6424,6 +6738,7 @@
           if (!bytes || !bytes.length) return;
           bufAdd(app.bufData, bytes);
           extract(app.bufData).forEach(([c, p]) => {
+            if (handleSerialWake("data", c, p)) return;
             onDataFrame(c, p);
             onAbnormalFrame(c, p);
             onTestFrame(c, p);
@@ -6437,7 +6752,9 @@
             return;
           }
           bufAdd(app.bufIap, bytes);
-          extractIap(app.bufIap).forEach(([c, p]) => dispatchIapFrame(c, p));
+          extractIap(app.bufIap).forEach(([c, p]) => {
+            if (!handleSerialWake("iap", c, p)) dispatchIapFrame(c, p);
+          });
         }
         const bjSec = () =>
           Math.max(
@@ -6447,10 +6764,10 @@
               Math.floor((Date.now() + BEIJING_OFFSET) / 1000),
             ),
           );
+        /* 拆分北京时间的年月日、星期及时间，用于设置设备RTC。 */
         function bjParts() {
-          const utc = Date.now() + new Date().getTimezoneOffset() * 60000,
-            bj = utc + BEIJING_OFFSET,
-            d = new Date(bj);
+          /* 将当前时间偏移八小时后按UTC字段读取北京时间。 */
+          const d = new Date(Date.now() + BEIJING_OFFSET);
           return {
             y: d.getUTCFullYear(),
             m: d.getUTCMonth() + 1,
@@ -6495,8 +6812,8 @@
             (s >> 24) & 255,
           ]);
         }
-        /* 发送透传数据，payload为内容，tip控制提示，msg为提示文本，th控制发送节流。 */
-        async function sendRaw(payload, tip, msg, th = false) {
+        /* 发送透传数据，payload为内容，tip和msg控制提示，th控制节流，isActive检查关联事务。 */
+        async function sendRaw(payload, tip, msg, th = false, isActive = null) {
           if (!app.isConnected || !app.writer) {
             if (tip) toast("未连接设备，无法发送");
             return false;
@@ -6513,24 +6830,16 @@
           const logGeneration = app.logGeneration;
           const writeGeneration = app.serialGeneration,
             writeWriter = app.writer;
+          /* 页面切换时取消发送，也不在新页面提示旧请求超时。 */
+          const pageToken = app.dataToken;
           try {
-            let off = 0;
-            while (off < payload.length) {
-              const end = Math.min(off + 256, payload.length);
-              await qwrite(
-                payload.slice(off, end),
-                th,
-                writeGeneration,
-                writeWriter,
-              );
-              if (
-                writeGeneration !== app.serialGeneration ||
-                writeWriter !== app.writer
-              )
-                return false;
-              off = end;
+            /* 整次透传只握手一次，握手成功后按原有大小连续发送各段。 */
+            const sent = await qwrite(payload, th, writeGeneration, writeWriter, null, { channel: "data", chunkSize: 256, logGeneration, isActive });
+            if (writeGeneration !== app.serialGeneration || writeWriter !== app.writer) return false;
+            if (!sent) {
+              if (tip && pageToken === app.dataToken && !isIapSerialBusy()) toast("未收到 GET_ACK 就绪应答，发送未完成");
+              return false;
             }
-            addLog("发送", payload, logGeneration);
             if (tip) toast(msg || `已发送${payload.length}字节`);
             return true;
           } catch (_) {
@@ -6548,8 +6857,8 @@
           const p = pkt(cmd, data);
           return sendRaw(p, true, `${name} 已发送(${p.length}字节)`, true);
         }
-        /* 发送普通查询，cmd为命令，data为载荷，pollToken用于取消排队中的异常轮询请求。 */
-        async function sendData(cmd, data = new Uint8Array(), pollToken = null) {
+        /* 发送普通查询，cmd为命令，data为载荷，pollToken和isActive用于取消旧请求。 */
+        async function sendData(cmd, data = new Uint8Array(), pollToken = null, isActive = null) {
           if (!app.isConnected || !app.writer)
             return false;
           if (isIapSerialBusy())
@@ -6561,18 +6870,7 @@
           /* 固定发送时的串口写对象。 */
           const writeWriter = app.writer;
           try {
-            /* 本次请求已完成发送的字节数。 */
-            let off = 0;
-            while (off < p.length) {
-              /* 沿用现有每段最多二百五十六字节的发送方式。 */
-              const end = Math.min(off + 256, p.length);
-              /* 被页面切换或电芯事务取消的异常请求返回失败。 */
-              const sent = await qwrite(p.slice(off, end), true, writeGeneration, writeWriter, null, pollToken);
-              if (sent === false || writeGeneration !== app.serialGeneration || writeWriter !== app.writer)
-                return false;
-              off = end;
-            }
-            return true;
+            return await qwrite(p, true, writeGeneration, writeWriter, null, { channel: "data", pollToken, isActive });
           } catch (_) {
             if (writeGeneration !== app.serialGeneration || writeWriter !== app.writer)
               return false;
@@ -6589,16 +6887,20 @@
           }
           await sendRaw(p, tip, null, false);
         }
+        /* 连接切换后清空旧设备数据和电芯查询状态。 */
         function resetData() {
-          app.soc = 0;
-          app.soh = 0;
-          app.status = 0;
-          app.pbMs = app.pbDefault;
+          app.soc = null;
+          app.soh = null;
+          app.status = null;
+          app.pbMs = null;
+          app.cellCount = null;
+          finishCellCountRequest(app.pendingCellCount, null);
           app.bat = defBat();
           app.projectInfo = defProjectInfo();
           app.cellInfo = defCellInfo();
           app.pendingStatic = new Set(STATIC_TYPES);
           app.pendingProjectInfo = true;
+          app.pendingCellModel = true;
           app.pendingCellInfo = true;
           /* 重置时释放整批事务，并清除上一设备的编辑值和勾选状态。 */
           cancelCellInfoTransactions("未读取电芯信息");
@@ -6616,8 +6918,7 @@
           app.abnormal = defAbnormal();
           app.bufData = [];
           app.bufIap = [];
-          app.portFrameExpect = 0;
-          app.portFrameLastTs = 0;
+          renderCellVoltageIndex();
           resetRxFrame(true);
           render();
         }
@@ -6633,8 +6934,9 @@
               generation === app.serialGeneration &&
               app.reader === reader
             ) {
+              /* 异步读完成后复核串口归属，防止旧连接的应答放行新连接的请求。 */
               const { value, done } = await reader.read();
-              if (done) break;
+              if (done || !app.readActive || generation !== app.serialGeneration || app.reader !== reader) break;
               if (value && value.length) {
                 const c =
                   value instanceof Uint8Array ? value : new Uint8Array(value);
@@ -6683,6 +6985,7 @@
           /* 切换设备或连接失败时清除上一设备的异常历史。 */
           app.abnormal = defAbnormal();
           app.readActive = false;
+          finishSerialWake(app.pendingSerialWake, false);
           /* 切换串口或重新打开失败时，也要释放整批电芯操作。 */
           if (app.pendingCellRead || app.pendingCellWrite || app.cellInfoWriteBatch) cancelCellInfoTransactions("串口连接已变更，请重新读取电芯信息");
           stopIapAckPoll();
@@ -6748,7 +7051,8 @@
             app.connectionBusy = true;
             updConnUI();
             try {
-              await cleanupConnectionNow(false);
+              /* 切换端口时清空旧设备的串数及静态数据，再启动新连接的查询。 */
+              await cleanupConnectionNow(true);
               try {
                 await p.open({
                   baudRate: baud,
@@ -6827,17 +7131,18 @@
           updConnUI();
           return ok;
         }
-        /* 停止普通数据轮询，同时撤销未完成的异常查询。 */
+        /* 停止普通数据轮询，同时撤销未完成的串数和异常查询。 */
         function stopPoll() {
           app.dataToken++;
           app.portToken++;
+          if (app.pendingSerialWake?.channel === "data") finishSerialWake(app.pendingSerialWake, false);
+          finishCellCountRequest(app.pendingCellCount, null);
           restartAbnormal("异常历史查询已暂停", 1000);
         }
+        /* 在数据页按周期读取电池、端口和异常历史。 */
         function startPoll() {
           stopPoll();
           if (!app.isConnected || app.dev || app.iap) return;
-          app.portFrameExpect = 0;
-          app.portFrameLastTs = 0;
           const token = ++app.dataToken;
           (async () => {
             let nextDataAt = 0,
@@ -6856,34 +7161,51 @@
               !app.iap
             ) {
               const now = Date.now();
-              if (now >= nextDataAt) {
+              if (now >= nextDataAt && (now < nextPortAt || nextDataAt <= nextPortAt)) {
                 const cycleStart = now,
                   types = [...DYNAMIC_TYPES];
                 STATIC_TYPES.forEach((type) => {
                   if (app.pendingStatic.has(type)) types.push(type);
                 });
-                await sendPollFrame(CMD_ACK);
-                if (app.pendingProjectInfo) await sendPollFrame(CMD_INFO);
-                /* 自动补拉也使用统一读取入口，避免与设置回读交叉。 */
-                if (app.pendingCellInfo && !app.pendingCellRead && !app.pendingCellWrite && !app.cellInfoWriteBatch && token === app.dataToken && !app.dev && !app.iap) {
-                  await sendGetCellInfo(false);
+                /* 任一查询无法唤醒设备时，推迟本组其余请求，避免对休眠设备连续超时。 */
+                if ((app.pendingProjectInfo && !(await sendPollFrame(CMD_INFO))) || (app.pendingCellModel && !(await sendPollFrame(CMD_GET_CELL_INFO, new Uint8Array([CELL_MODEL_INDEX])))) || !(await sendPollFrame(CMD_RTC, new Uint8Array([0x01])))) {
+                  nextDataAt = Date.now() + DATA_POLL_INTERVAL_MS;
+                  continue;
+                }
+                /* 串数未确认时跳过按节查询，公共型号等参数继续轮询。 */
+                if (app.cellCount == null && token === app.dataToken) {
+                  void requestCellCount(false, token);
                   await sleep(POLL_COMMAND_GAP_MS);
                 }
-                await sendPollFrame(CMD_RTC, new Uint8Array([0x01]));
-                for (let i = 0; i < types.length; i++) {
-                  if (!(await sendPollFrame(CMD_DATA, new Uint8Array([types[i] & 255]))))
+                /* 数据查询失败后结束本轮，不再排入附加的按节查询。 */
+                let dataReady = true;
+                for (const type of types) {
+                  if (!(await sendPollFrame(CMD_DATA, new Uint8Array([type & 255])))) {
+                    dataReady = false;
                     break;
+                  }
                 }
-                nextDataAt = cycleStart + DATA_POLL_INTERVAL_MS;
+                /* 电压轮询只取当前串数范围内的编号。 */
+                const cellCount = app.cellCount ?? 0;
+                for (let index = 1; dataReady && index <= cellCount && app.cellCount === cellCount; index++) {
+                  if (!(await sendPollFrame(CMD_DATA, new Uint8Array([DT_CELL_VOLTAGE, index])))) dataReady = false;
+                }
+                /* 按节编码只补读缺项，并与设置回读互斥。 */
+                if (dataReady && cellCount > 0 && app.pendingCellInfo && !app.pendingCellRead && !app.pendingCellWrite && !app.cellInfoWriteBatch && token === app.dataToken && !app.dev && !app.iap) {
+                  await sendGetCellInfo(false);
+                }
+                nextDataAt = (dataReady ? cycleStart : Date.now()) + DATA_POLL_INTERVAL_MS;
                 continue;
               }
               if (now >= nextPortAt) {
                 const cycleStart = now;
                 for (let port = 0; port < PORT_COUNT; port++) {
-                  if (!(await sendPollFrame(CMD_PORT, new Uint8Array([port & 255]))))
+                  if (!(await sendPollFrame(CMD_PORT, new Uint8Array([port & 255])))) {
+                    nextPortAt = Date.now() + PORT_POLL_INTERVAL_MS;
                     break;
+                  }
                 }
-                nextPortAt = cycleStart + PORT_POLL_INTERVAL_MS;
+                nextPortAt = Math.max(nextPortAt, cycleStart + PORT_POLL_INTERVAL_MS);
                 continue;
               }
               /* 首轮数据及端口轮询完成后，按单发单等方式查询异常历史。 */
@@ -6905,8 +7227,16 @@
             100,
             Math.min(60000, Number.parseInt(app.timedText, 10) || 1000),
           );
-          app.timedTimer = setInterval(() => {
-            if (app.timed) sendNow(false);
+          /* 定时周期比握手短时跳过重叠触发，避免持续积压同一发送。 */
+          let sending = false;
+          app.timedTimer = setInterval(async () => {
+            if (!app.timed || sending) return;
+            sending = true;
+            try {
+              await sendNow(false);
+            } finally {
+              sending = false;
+            }
           }, iv);
         }
         async function refreshPorts() {
@@ -7067,6 +7397,11 @@
             openCmd();
             toast("已进入开发者模式");
           } else {
+            /* 返回数据页时终止尚未结束的手动电芯操作。 */
+            if (app.pendingCellRead || app.pendingCellWrite || app.cellInfoWriteBatch) {
+              app.pendingCellInfo = true;
+              cancelCellInfoTransactions("已返回数据界面，电芯操作结束");
+            }
             startPoll();
             toast("已退出开发者模式");
           }
@@ -7083,6 +7418,56 @@
             devMode(true);
           }
         }
+        /* 根据已确认的串数更新开发者页面的电芯编号选择。 */
+        function renderCellVoltageIndex() {
+          /* 编号选择框及本次刷新前的选中值。 */
+          const select = el.getCellVoltageIndex;
+          /* 串数范围未变时保留原编号。 */
+          const selectedIndex = Number(select.value);
+          /* 当前串数，未收到合法应答时没有可选项。 */
+          const count = app.cellCount ?? 0;
+          el.getCellVoltageIndexRow.hidden = app.getDataType !== DT_CELL_VOLTAGE;
+          select.disabled = count === 0;
+          select.replaceChildren();
+          if (!count) {
+            /* 在接收串数前提示用户先读取串数。 */
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.textContent = "请先读取电池串数";
+            select.appendChild(placeholder);
+            return;
+          }
+          /* 编号从一开始，并受设备串数约束。 */
+          for (let index = 1; index <= count; index++) {
+            /* 当前编号的下拉选项。 */
+            const option = document.createElement("option");
+            option.value = String(index);
+            option.textContent = `电芯 ${index}`;
+            select.appendChild(option);
+          }
+          select.value = String(selectedIndex >= 1 && selectedIndex <= count ? selectedIndex : 1);
+        }
+        /* 按当前字段与编号发送开发者页面的数据读取命令。 */
+        async function sendSelectedData() {
+          /* 点击发送时选中的数据类型。 */
+          const type = app.getDataType;
+          if (type === DT_COUNT) {
+            await requestCellCount(true);
+            return;
+          }
+          if (type === DT_CELL_VOLTAGE) {
+            /* 由串数筛选后选中的电芯编号。 */
+            const index = Number(el.getCellVoltageIndex.value);
+            if (!Number.isInteger(index) || index < 1 || index > (app.cellCount ?? 0)) {
+              toast("请先读取电池串数，再选择电芯编号");
+              return;
+            }
+            await sendCmd("USB_CMD_GET_DATA", CMD_DATA, new Uint8Array([type, index]));
+            return;
+          }
+          await sendCmd("USB_CMD_GET_DATA", CMD_DATA, new Uint8Array([type]));
+        }
+        /* 刷新开发者页面各个普通协议命令的参数选项。 */
         function cmdSel() {
           el.getDataTypeGrid.innerHTML = "";
           GET_DATA_OPTS.forEach(([v, l]) => {
@@ -7096,6 +7481,7 @@
             };
             el.getDataTypeGrid.appendChild(b);
           });
+          renderCellVoltageIndex();
           el.rtcFormatGrid.innerHTML = "";
           RTC_OPTS.forEach(([v, l]) => {
             const on = app.getRtcFmt === v || app.setRtcFmt === v;
@@ -7246,11 +7632,74 @@
           app.cellInfoWriteBatch = null;
           finishCellInfoTransaction(message);
         }
-        /* 结束四编号读取，read为本次收集回复的批次，无回复的编码保持默认值。 */
+        /* 完成串数查询，request为原查询，count为空时表示超时或取消。 */
+        function finishCellCountRequest(request, count) {
+          if (!request || app.pendingCellCount !== request) return;
+          clearTimeout(request.timer);
+          app.pendingCellCount = null;
+          request.resolve(count);
+          renderDeviceInfo();
+        }
+        /* 发起或复用串数查询，tip启用命令提示，token绑定数据页轮询。 */
+        function requestCellCount(tip, token = null) {
+          if (!app.isConnected || !app.writer || isIapSerialBusy()) {
+            if (tip) toast("设备未连接或IAP正在占用串口，无法读取电池串数");
+            return Promise.resolve(null);
+          }
+          if (app.pendingCellCount) return app.pendingCellCount.promise;
+          /* 记录当前串口及所有共享本次应答的等待状态。 */
+          const request = { generation: app.serialGeneration, promise: null, resolve: null, timer: null };
+          request.promise = new Promise((resolve) => {
+            request.resolve = resolve;
+          });
+          app.pendingCellCount = request;
+          /* 超时后允许数据页重试，开发者页面提示检查设备支持情况。 */
+          request.timer = setTimeout(() => {
+            finishCellCountRequest(request, null);
+            if (tip) toast("读取电池串数超时，请检查设备应答");
+          }, CELL_INFO_TIMEOUT_MS);
+          renderDeviceInfo();
+          /* 串数命令的载荷只含类型字节。 */
+          const payload = new Uint8Array([DT_COUNT]);
+          /* 手动查询显示发送日志，自动查询绑定数据页轮询。 */
+          const sending = tip ? sendCmd("USB_CMD_GET_DATA", CMD_DATA, payload) : sendData(CMD_DATA, payload, token);
+          void sending.then((sent) => {
+            if (!sent) finishCellCountRequest(request, null);
+          });
+          return request.promise;
+        }
+        /* 应用设备确认的串数，串数变化时丢弃旧的按节数据。 */
+        function applyCellCount(count) {
+          if (app.cellCount !== count) {
+            if (app.pendingCellRead || app.pendingCellWrite || app.cellInfoWriteBatch) {
+              cancelCellInfoTransactions("电池串数已变化，请重新读取电芯信息");
+            }
+            app.cellCount = count;
+            app.bat.cellVoltages.fill("---");
+            /* 串数变化只重置按节数据，保留已经读取的公共型号。 */
+            app.cellInfo.codes.fill(null);
+            app.pendingCellInfo = true;
+            /* 超出新串数的编辑项解除勾选，保留用户输入供核对。 */
+            for (let index = count; index < CELL_INFO_NUM; index++) {
+              el.cellInfoCodeSelected[index].checked = false;
+            }
+            renderCellVoltageIndex();
+            renderBat();
+            renderDeviceInfo();
+          }
+          /* 应答只结束同一串口代次的查询。 */
+          const request = app.pendingCellCount;
+          if (request && request.generation === app.serialGeneration) finishCellCountRequest(request, count);
+        }
+        /* 结束本轮编号读取，read记录本轮所请求及尚未回复的编号。 */
         function finishCellInfoRead(read) {
           if (app.pendingCellRead !== read) return;
-          app.pendingCellInfo = false;
-          finishCellInfoTransaction("读取完成，收到" + (CELL_INFO_NUM - read.pending.size) + "条编码回复");
+          app.pendingCellInfo = read.pending.size > 0;
+          /* 已收到的编号数按当次请求范围计算。 */
+          const received = read.total - read.pending.size;
+          /* 部分超时保留已收到的数据，数据页下轮可补读缺项。 */
+          const message = read.pending.size ? `读取超时，收到 ${received}/${read.total} 条编码回复` : `读取完成，收到 ${received} 条编码回复`;
+          finishCellInfoTransaction(message);
         }
         /* 启动应答计时，request为当前事务，message为设置确认或回读超时说明。 */
         function armCellInfoTimeout(request, message) {
@@ -7265,7 +7714,7 @@
             finishCellInfoTransaction(message, false, { ok: false, stop: true });
           }, CELL_INFO_TIMEOUT_MS);
         }
-        /* 读取一至四号编码，tip区分手动读取，write用于设置后的单编号回读。 */
+        /* 手动查询公共型号并按串数读取编码，write用于设置后的单编号回读。 */
         async function sendGetCellInfo(tip = true, write = null) {
           if (app.pendingCellRead || app.pendingCellWrite !== write || (!write && app.cellInfoWriteBatch)) {
             if (tip) toast("电芯操作尚未结束，请稍后重试");
@@ -7276,21 +7725,38 @@
             else if (tip) toast("设备未连接或IAP正在占用串口，无法读取电芯信息");
             return false;
           }
-          /* 普通读取固定请求四个编号，设置回读只请求刚写入的编号。 */
-          const indices = write ? [write.index] : Array.from({ length: CELL_INFO_NUM }, (_, index) => index + 1);
+          if (tip && !write) {
+            /* 管理员手动读取时直接发送公共型号请求，串数超时也能收到型号。 */
+            void sendRaw(pkt(CMD_GET_CELL_INFO, new Uint8Array([CELL_MODEL_INDEX])), false, null, true);
+          }
+          if (app.cellCount == null) {
+            if (!tip || write) return false;
+            /* 手动读取编码先等待串数，退出当前页面后不再发送编号请求。 */
+            const token = app.dataToken;
+            /* 等待期间用于确认当前连接未变化的串口代次。 */
+            const generation = app.serialGeneration;
+            /* 本次查询从设备确认的串数。 */
+            const count = await requestCellCount(true);
+            if (!count || token !== app.dataToken || generation !== app.serialGeneration || app.cellCount !== count || app.pendingCellRead || app.pendingCellWrite || app.cellInfoWriteBatch) return false;
+          }
+          /* 手动读取所有有效编号，自动读取只补缺项，设置后只回读该编号。 */
+          const indices = write ? [write.index] : Array.from({ length: app.cellCount }, (_, index) => index + 1).filter((index) => tip || app.cellInfo.codes[index - 1] == null);
+          if (!indices.length) {
+            app.pendingCellInfo = false;
+            return false;
+          }
           /* 跟踪已发编号、待回复编号、页面代次及关联设置。 */
-          const read = { generation: app.serialGeneration, token: app.dataToken, auto: !tip && !write, write, pending: new Set(indices), sent: new Set(), sending: true, timer: null };
+          const read = { generation: app.serialGeneration, token: app.dataToken, auto: !tip && !write, write, total: indices.length, pending: new Set(indices), sent: new Set(), sending: true, timer: null };
           app.pendingCellRead = read;
-          if (!write) {
-            app.cellInfo = defCellInfo();
+          if (!write && tip) {
+            app.cellInfo.codes.fill(null);
             app.pendingCellInfo = true;
-            if (!el.cellInfoModelSelected.checked && el.cellInfoModelInput.dataset.cellInfoEdited !== "1") el.cellInfoModelInput.value = "";
             /* 清除上轮未编辑的输入，缺失编号由空输入和默认显示表示。 */
             for (let index = 0; index < CELL_INFO_NUM; index++) {
               if (!el.cellInfoCodeSelected[index].checked && el.cellInfoCodeInputs[index].dataset.cellInfoEdited !== "1") el.cellInfoCodeInputs[index].value = "";
             }
           }
-          app.cellInfoSetTip = write ? "设置完成，正在回读" + write.label : "正在读取编号1～4...";
+          app.cellInfoSetTip = write ? "设置完成，正在回读" + write.label : `正在读取电芯编号 ${indices.join("、")}...`;
           renderDeviceInfo();
           /* 按编号依次发送，复用现有帧间间隔以保护设备接收缓冲。 */
           for (const index of indices) {
@@ -7303,8 +7769,10 @@
             read.sent.add(index);
             /* GET请求固定携带一个编号字节。 */
             const payload = new Uint8Array([index]);
+            /* 握手期间串数变化会取消旧事务，实际写入前复核本次读取。 */
+            const isActive = () => app.pendingCellRead === read;
             /* 手动读取保留发送日志，自动读取和设置回读沿用数据发送入口。 */
-            const sent = tip ? await sendRaw(pkt(CMD_GET_CELL_INFO, payload), false, null, true) : await sendData(CMD_GET_CELL_INFO, payload);
+            const sent = tip ? await sendRaw(pkt(CMD_GET_CELL_INFO, payload), false, null, true, isActive) : await sendData(CMD_GET_CELL_INFO, payload, null, isActive);
             if (app.pendingCellRead !== read || read.generation !== app.serialGeneration) return sent;
             if (!sent) {
               finishCellInfoTransaction("编号" + index + "读取请求发送失败", !write);
@@ -7316,7 +7784,7 @@
           read.sending = false;
           if (!write && read.pending.size === 0) finishCellInfoRead(read);
           else armCellInfoTimeout(read, "设置已确认，但回读超时，请重新读取设备当前值");
-          if (tip) toast("已依次发送编号1～4的读取请求");
+          if (tip) toast(`已依次发送电芯编号 ${indices.join("、")} 的读取请求`);
           return true;
         }
         /* 规范设置文本，value为输入内容，返回去除首尾空白后的大写文本。 */
@@ -7342,7 +7810,7 @@
           payload[1] = write.field;
           payload.set(text, 2);
           /* 每项保留发送日志，最终统一显示整批执行结果。 */
-          const sent = await sendRaw(pkt(CMD_SET_CELL_INFO, payload), false, null, true);
+          const sent = await sendRaw(pkt(CMD_SET_CELL_INFO, payload), false, null, true, () => app.pendingCellWrite === write);
           if (app.pendingCellWrite === write && write.generation === app.serialGeneration) {
             if (!sent) finishCellInfoTransaction(write.label + "设置请求发送失败");
             else if (write.phase === "ack") armCellInfoTimeout(write, write.label + "设置确认超时，结果待回读确认");
@@ -7359,10 +7827,14 @@
             toast("设备未连接或IAP正在占用串口，无法设置电芯信息");
             return;
           }
+          if (app.cellCount == null) {
+            toast("请先读取电芯信息，确认电池串数后再设置");
+            return;
+          }
           /* 公共型号只提交一次，协议要求携带有效编号，因此固定使用编号一。 */
           const fields = [{ index: 1, field: 0, label: "电芯型号", input: el.cellInfoModelInput, selected: el.cellInfoModelSelected }];
           /* 每个编码对应自己的输入和勾选状态。 */
-          for (let index = 0; index < CELL_INFO_NUM; index++) {
+          for (let index = 0; index < app.cellCount; index++) {
             fields.push({ index: index + 1, field: 1, label: "电芯编码" + (index + 1), input: el.cellInfoCodeInputs[index], selected: el.cellInfoCodeSelected[index] });
           }
           /* 在发送首项之前完成全部勾选值的校验和快照。 */
@@ -7530,12 +8002,8 @@
           el.adminLoginBtn.onclick = openAdmin;
           el.cmdGetAckBtn.onclick = () => sendCmd("USB_CMD_GET_ACK", CMD_ACK);
           el.cmdGetInfoBtn.onclick = () => sendCmd("USB_CMD_GET_INFO", CMD_INFO);
-          el.sendGetDataBtn.onclick = () =>
-            sendCmd(
-              "USB_CMD_GET_DATA",
-              0x02,
-              new Uint8Array([app.getDataType & 255]),
-            );
+          el.cmdGetCellModelBtn.onclick = () => sendCmd("USB_CMD_GET_CELL_INFO", CMD_GET_CELL_INFO, new Uint8Array([CELL_MODEL_INDEX]));
+          el.sendGetDataBtn.onclick = sendSelectedData;
           el.sendGetRtcBtn.onclick = () =>
             sendCmd(
               "USB_CMD_GET_RTC",
@@ -7595,13 +8063,12 @@
           };
           el.iapChooseFileBtn.onclick = () => el.iapFileInput.click();
           el.iapFileInput.onchange = async () => {
-            await chooseIapFile(el.iapFileInput.files && el.iapFileInput.files[0]);
+            /* 清空选取控件以便重新选择编译产生的同名文件。 */
+            const file = el.iapFileInput.files?.[0];
+            el.iapFileInput.value = "";
+            await chooseIapFile(file);
           };
           el.iapDownloadBtn.onclick = () => startIapDownload();
-          el.iapDemoBtn.onclick = async () => {
-            if (await chooseIapFile(createDemoBin()))
-              await startIapTestProgram("测试演示");
-          };
           el.cancelAdminBtn.onclick = closeAdmin;
           el.toggleAdminPasswordBtn.onclick = () => {
             app.pwdShow = !app.pwdShow;
@@ -7713,10 +8180,6 @@
         const upgradeView = document.getElementById("iapView");
         /* 原标题连击入口。 */
         const titleEntry = document.getElementById("topTitle");
-        /* 原数据字段选择按钮容器。 */
-        const dataOptions = document.getElementById("getDataTypeGrid");
-        /* 当前数据字段的展示标签。 */
-        const dataOptionLabel = document.getElementById("uiDataTypeLabel");
         /* 原端口渲染容器。 */
         const portList = document.getElementById("portInfoList");
         /* 保存各端口的展开状态，兼容原业务定期重建端口卡片。 */
@@ -7746,20 +8209,6 @@
             for (let tap = 0; tap < 5; tap++) {
               titleEntry.click();
             }
-          }
-        }
-
-        /* 显示原按钮组当前选中的字段名称。 */
-        function syncDataSelection() {
-          /* 由原命令选择逻辑标记的按钮。 */
-          const selectedOption = dataOptions.querySelector(".c.on");
-          dataOptionLabel.textContent = selectedOption ? selectedOption.textContent : "选择数据字段";
-        }
-
-        /* 参数选择完成后收起字段列表，event为原按钮组的点击事件。 */
-        function closeDataSelection(event) {
-          if (event.target.closest("button")) {
-            dataOptions.parentElement.open = false;
           }
         }
 
@@ -7812,14 +8261,9 @@
         /* 原端口列表重建后的展示层监听器。 */
         const portObserver = new MutationObserver(decoratePorts);
         portObserver.observe(portList, { childList: true });
-        /* 原字段按钮组变化后的展示层监听器。 */
-        const dataObserver = new MutationObserver(syncDataSelection);
-        dataObserver.observe(dataOptions, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
         dataNavigation.addEventListener("click", openDataView);
         developerNavigation.addEventListener("click", openDeveloperView);
-        dataOptions.addEventListener("click", closeDataSelection);
         syncNavigation();
-        syncDataSelection();
         decoratePorts();
       })();
 

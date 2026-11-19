@@ -45,6 +45,7 @@
 .eslintcache
 .parcel-cache/
 .vite/
+/work/
 *.uvguix.*
 *.uvgui.*
 *.bak
@@ -62,6 +63,7 @@ Desktop.ini
 ~$*.docx
 ~$*.doc
 ~$*.docm
+.~lock.*#
 *.wbk
 *.asd
 *.orig
